@@ -108,8 +108,8 @@ export const buildSeed = (clock: Clock): DemoState => {
   ];
 
   const usuarios: Usuario[] = [
-    { id: 'usr-andrea', usuario: 'andrea.admin', nombre: 'Andrea Ríos', perfiles: [{ perfil: 'administrador' }] },
-    { id: 'usr-paula', usuario: 'paula.condor', nombre: 'Paula Méndez', perfiles: [{ perfil: 'empresa', empresaId: 'EMP-A' }] },
+    { id: 'usr-andrea', usuario: 'andrea.admin', nombre: 'Andrea Ríos', perfiles: [{ perfil: 'administrador' }], activo: true },
+    { id: 'usr-paula', usuario: 'paula.condor', nombre: 'Paula Méndez', perfiles: [{ perfil: 'empresa', empresaId: 'EMP-A' }], activo: true },
     {
       id: 'usr-ramiro',
       usuario: 'ramiro.cardenas',
@@ -118,28 +118,32 @@ export const buildSeed = (clock: Clock): DemoState => {
         { perfil: 'vendedor', empresaId: 'EMP-A', vendedorId: 'VEN-A1' },
         { perfil: 'conductor', empresaId: 'EMP-A', vendedorId: 'VEN-A1', conductorId: 'CDT-A1' },
       ],
+      activo: true,
     },
-    { id: 'usr-doris', usuario: 'doris.lucero', nombre: 'Doris Lucero', perfiles: [{ perfil: 'vendedor', empresaId: 'EMP-A', vendedorId: 'VEN-A2' }] },
-    { id: 'usr-olga', usuario: 'olga.pineda', nombre: 'Olga Pineda', perfiles: [{ perfil: 'vendedor', empresaId: 'EMP-A', vendedorId: 'VEN-A3' }] },
+    { id: 'usr-doris', usuario: 'doris.lucero', nombre: 'Doris Lucero', perfiles: [{ perfil: 'vendedor', empresaId: 'EMP-A', vendedorId: 'VEN-A2' }], activo: true },
+    { id: 'usr-olga', usuario: 'olga.pineda', nombre: 'Olga Pineda', perfiles: [{ perfil: 'vendedor', empresaId: 'EMP-A', vendedorId: 'VEN-A3' }], activo: true },
     {
       id: 'usr-wilson',
       usuario: 'wilson.ortega',
       nombre: 'Wilson Ortega',
       perfiles: [{ perfil: 'conductor', empresaId: 'EMP-A', vendedorId: 'VEN-A2', conductorId: 'CDT-A2' }],
+      activo: true,
     },
     {
       id: 'usr-yesid',
       usuario: 'yesid.navarro',
       nombre: 'Yesid Navarro',
       perfiles: [{ perfil: 'conductor', empresaId: 'EMP-A', vendedorId: 'VEN-A2', conductorId: 'CDT-A3' }],
+      activo: true,
     },
     {
       id: 'usr-edna',
       usuario: 'edna.quiroga',
       nombre: 'Edna Quiroga',
       perfiles: [{ perfil: 'conductor', empresaId: 'EMP-A', vendedorId: 'VEN-A3', conductorId: 'CDT-A4' }],
+      activo: true,
     },
-    { id: 'usr-jorge', usuario: 'jorge.ceiba', nombre: 'Jorge Salas', perfiles: [{ perfil: 'empresa', empresaId: 'EMP-B' }] },
+    { id: 'usr-jorge', usuario: 'jorge.ceiba', nombre: 'Jorge Salas', perfiles: [{ perfil: 'empresa', empresaId: 'EMP-B' }], activo: true },
     {
       id: 'usr-hernan',
       usuario: 'hernan.rojas',
@@ -148,13 +152,15 @@ export const buildSeed = (clock: Clock): DemoState => {
         { perfil: 'vendedor', empresaId: 'EMP-B', vendedorId: 'VEN-B1' },
         { perfil: 'conductor', empresaId: 'EMP-B', vendedorId: 'VEN-B1', conductorId: 'CDT-B1' },
       ],
+      activo: true,
     },
-    { id: 'usr-marta', usuario: 'marta.gil', nombre: 'Marta Gil', perfiles: [{ perfil: 'vendedor', empresaId: 'EMP-B', vendedorId: 'VEN-B2' }] },
+    { id: 'usr-marta', usuario: 'marta.gil', nombre: 'Marta Gil', perfiles: [{ perfil: 'vendedor', empresaId: 'EMP-B', vendedorId: 'VEN-B2' }], activo: true },
     {
       id: 'usr-nelson',
       usuario: 'nelson.pardo',
       nombre: 'Nelson Pardo',
       perfiles: [{ perfil: 'conductor', empresaId: 'EMP-B', vendedorId: 'VEN-B2', conductorId: 'CDT-B2' }],
+      activo: true,
     },
   ];
 
@@ -308,6 +314,6 @@ export const buildSeed = (clock: Clock): DemoState => {
       'EMP-B': { CAR: 2, VTA: 1, COB: 3, PAG: 0, VEN: 2, VEH: 2, CDT: 2 },
     },
     empresasCreadas: 2,
-    sesion: { usuarioId: null, perfil: null },
+    sesion: { usuarioId: null },
   };
 };

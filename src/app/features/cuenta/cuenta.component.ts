@@ -1,59 +1,51 @@
 import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import {
   cuentaVendedor,
   ESTADO_EXISTENCIAS_LABEL,
   ESTADO_PAGO_LABEL,
   ESTADO_VENDEDOR_LABEL,
-  EstadoPago,
-  EstadoVendedor,
   MEDIO_LABEL,
   subtotalSeleccion,
-  vendedoresDe,
+  vendedorById,
 } from '../../core/simulation/selectors';
-import { formatMoney } from '../../core/simulation/format';
 import { DemoStore } from '../../core/state/demo.store';
-import { BadgeComponent, BadgeTone, IlustrativoComponent } from '../../shared/badges.component';
-import { CodeTextComponent } from '../../shared/code-text.component';
+import { BadgeComponent, IlustrativoComponent } from '../../shared/badges.component';
+import { Miga, MigasComponent } from '../../shared/migas.component';
+import { ParamAjenoComponent } from '../../shared/param-ajeno.component';
 import { CopPipe, FechaPipe, KgPipe } from '../../shared/pipes';
-import { DISCLAIMER } from '../../brand';
-
-export const TONO_PAGO: Record<EstadoPago, BadgeTone> = { pendiente: 'neutral', abonada: 'warn', saldada: 'ok' };
-export const TONO_VENDEDOR: Record<EstadoVendedor, BadgeTone> = { sin_cargas: 'neutral', con_saldo: 'warn', al_dia: 'ok', a_favor: 'info' };
+import { MovimientosTablaComponent, TONO_PAGO, TONO_VENDEDOR } from './cuenta-shared';
 
 /**
- * V09 · Cuenta del vendedor e informe (F08, F08b; RN-09, RN-11, RN-13). Cuenta corriente con
- * saldo total y por carga, aplicaciones de los abonos (origen o la más antigua), movimientos
- * con saldo corrido y dinero en poder del vendedor. Solo lectura. La empresa elige el vendedor
- * (solo de los suyos, E09); el vendedor ve solo su cuenta (E36).
+ * V20 · Cuenta del vendedor (empresa) y V26 · Mi cuenta (vendedor) (F08; RN-09, RN-11, RN-13).
+ * Es la misma cuenta, con el vendedor de la ruta (empresa, validado contra su empresa, E09) o el
+ * de la sesión (vendedor, E36): saldo total y por carga, aplicación de los abonos, dinero en
+ * poder y, para la empresa, movimientos con saldo corrido. Aquí no se registra nada. El informe
+ * tiene su propia ruta (V21, V29).
  */
 @Component({
   selector: 'app-cuenta',
-  imports: [RouterLink, BadgeComponent, IlustrativoComponent, CodeTextComponent, CopPipe, FechaPipe, KgPipe],
+  imports: [RouterLink, BadgeComponent, IlustrativoComponent, MigasComponent, ParamAjenoComponent, MovimientosTablaComponent, CopPipe, FechaPipe, KgPipe],
   template: `
-    <div [class.no-print]="informe()">
-      <div class="mb-3 flex flex-wrap items-center gap-2">
-        <h1 class="page-title flex-1">{{ esEmpresa() ? 'Cuentas' : 'Mi cuenta' }}</h1>
-        @if (esEmpresa()) {
-          <label class="sr-only" for="sel-vendedor">Vendedor</label>
-          <select id="sel-vendedor" class="input w-auto" data-testid="selector-vendedor" (change)="elegir($event)">
-            @for (v of vendedores(); track v.id) {
-              <option [value]="v.id" [selected]="v.id === vendedorId()">{{ v.nombre }}</option>
-            }
-          </select>
-        }
-      </div>
+    @if (esEmpresa()) {
+      <app-migas [items]="migas()" />
+    }
+    <div>
+      <h1 class="page-title mb-3">{{ esEmpresa() ? 'Cuenta del vendedor' : 'Mi cuenta' }}</h1>
 
       @if (ajeno(); as msg) {
-        <p class="error-text" data-testid="vendedor-ajeno" role="alert">{{ msg }}</p>
+        <app-param-ajeno [texto]="msg" enlace="Cuentas de vendedores" link="/empresa/cuentas" />
       } @else if (cuenta(); as c) {
         <div class="mb-3 flex flex-wrap items-center gap-2">
           <h2 class="text-lg font-bold text-navy" data-testid="cuenta-vendedor">{{ c.vendedor.nombre }}</h2>
           <app-badge [tone]="tonoVendedor[c.estado]" data-testid="resumen-estado">{{ estadoVendedor[c.estado] }}</app-badge>
           <span class="flex-1"></span>
-          <button type="button" class="btn btn-primary" data-testid="btn-informe" (click)="informe.set(true)">Informe</button>
+          <a class="btn btn-primary" [routerLink]="rutaInforme()" [queryParams]="paramsInforme()" data-testid="btn-informe">Informe</a>
           @if (esEmpresa()) {
-            <a class="btn" [routerLink]="'/empresa/conciliacion'" [queryParams]="{ vendedor: c.vendedor.id }" data-testid="ir-conciliacion">Ir a la conciliación</a>
+            @if (store.can('pago.registrar')) {
+              <a class="btn" routerLink="/empresa/pagos/nuevo" [queryParams]="{ vendedor: c.vendedor.id }" data-testid="ir-registrar-pago">Registrar pago</a>
+            }
+            <a class="btn" [routerLink]="'/empresa/conciliacion/' + c.vendedor.id" data-testid="ir-conciliacion">Conciliación</a>
           }
         </div>
 
@@ -113,7 +105,9 @@ export const TONO_VENDEDOR: Record<EstadoVendedor, BadgeTone> = { sin_cargas: 'n
                       (change)="marcar(x.carga.id)"
                     />
                   </td>
-                  <td class="font-mono whitespace-nowrap">{{ x.carga.id }}</td>
+                  <td class="whitespace-nowrap">
+                    <a class="font-mono text-primary underline" [routerLink]="rutaCarga() + x.carga.id" [attr.data-testid]="'abrir-' + x.carga.id">{{ x.carga.id }}</a>
+                  </td>
                   <td class="whitespace-nowrap">{{ x.carga.fechaHora | fecha }}</td>
                   <td class="font-mono whitespace-nowrap">{{ x.placa }}</td>
                   <td>{{ x.conductor }}</td>
@@ -124,7 +118,7 @@ export const TONO_VENDEDOR: Record<EstadoVendedor, BadgeTone> = { sin_cargas: 'n
                   <td><app-badge [tone]="tonoPago[x.estadoPago]" [attr.data-testid]="'estado-' + x.carga.id">{{ estadoPago[x.estadoPago] }}</app-badge></td>
                   <td>{{ estadoExistencias[x.estadoExistencias] }}</td>
                   <td>
-                    <button type="button" class="text-xs text-primary underline" [attr.data-testid]="'detalle-' + x.carga.id" (click)="abrir(x.carga.id)">
+                    <button type="button" class="min-h-11 text-xs text-primary underline md:min-h-0" [attr.data-testid]="'detalle-' + x.carga.id" (click)="abrir(x.carga.id)">
                       {{ abierta() === x.carga.id ? 'Ocultar' : 'Abonos' }}
                     </button>
                   </td>
@@ -164,30 +158,15 @@ export const TONO_VENDEDOR: Record<EstadoVendedor, BadgeTone> = { sin_cargas: 'n
           }
         </section>
 
-        <div class="grid gap-4 xl:grid-cols-2">
+        <div class="grid gap-4" [class.xl:grid-cols-2]="esEmpresa()">
+          @if (esEmpresa()) {
+            <section class="card overflow-x-auto">
+              <h2 class="card-title">Movimientos (cuenta corriente)</h2>
+              <app-movimientos-tabla [movimientos]="c.movimientos" />
+            </section>
+          }
           <section class="card overflow-x-auto">
-            <h2 class="card-title">Movimientos (cuenta corriente)</h2>
-            <table class="table" data-testid="tabla-movimientos">
-              <thead>
-                <tr><th>Fecha</th><th>Movimiento</th><th class="num">Cargo</th><th class="num">Abono</th><th class="num">Saldo</th></tr>
-              </thead>
-              <tbody>
-                @for (m of c.movimientos; track m.id) {
-                  <tr [attr.data-testid]="'mov-' + m.id">
-                    <td class="whitespace-nowrap">{{ m.fechaHora | fecha }}</td>
-                    <td><app-code-text [text]="m.descripcion" /></td>
-                    <td class="num">{{ m.cargo ? (m.cargo | cop) : '' }}</td>
-                    <td class="num">{{ m.abono ? (m.abono | cop) : '' }}</td>
-                    <td class="num font-semibold">{{ m.saldo < 0 ? (-m.saldo | cop) + ' a favor' : (m.saldo | cop) }}</td>
-                  </tr>
-                } @empty {
-                  <tr><td colspan="5" class="text-muted">Sin movimientos.</td></tr>
-                }
-              </tbody>
-            </table>
-          </section>
-          <section class="card overflow-x-auto">
-            <h2 class="card-title">Dinero en poder del vendedor <app-ilustrativo detalle="SUP-10" /></h2>
+            <h2 class="card-title">{{ esEmpresa() ? 'Dinero en poder del vendedor' : 'Dinero en tu poder' }} <app-ilustrativo detalle="SUP-10" /></h2>
             <p class="mb-2 text-xs text-muted">Cobros en efectivo y a la llave del vendedor: no abonan a la cuenta.</p>
             <table class="table" data-testid="tabla-en-poder">
               <thead>
@@ -209,102 +188,17 @@ export const TONO_VENDEDOR: Record<EstadoVendedor, BadgeTone> = { sin_cargas: 'n
             </table>
           </section>
         </div>
-      } @else {
-        <p class="card text-sm text-muted">No hay vendedores en esta empresa todavía.</p>
       }
     </div>
 
-    @if (informe() && cuenta(); as c) {
-      <div class="informe-imprimible fixed inset-0 z-[70] overflow-y-auto bg-white print:static print:overflow-visible" role="dialog" aria-modal="true" aria-label="Informe de la cuenta" data-testid="informe">
-        <div class="border-b-2 border-accent bg-navy py-1 text-center text-xs font-extrabold tracking-widest text-white" data-testid="informe-leyenda">{{ disclaimer }}</div>
-        <div class="mx-auto max-w-4xl p-4 md:p-6">
-          <div class="no-print mb-4 flex gap-2">
-            <button type="button" class="btn btn-primary" data-testid="btn-imprimir" (click)="imprimir()">Imprimir</button>
-            <button type="button" class="btn" data-testid="cerrar-informe" (click)="informe.set(false)">Cerrar</button>
-          </div>
-          <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <img src="gaslink-logo.png" alt="GasLink · Gestión comercial del gas" class="h-14 w-auto" width="168" height="56" />
-            <div class="text-right text-sm">
-              <p class="text-lg font-extrabold text-navy">Informe de la cuenta del vendedor</p>
-              <p>{{ empresaNombre() }}</p>
-              <p class="text-muted">Generado {{ ahora() | fecha }}</p>
-            </div>
-          </div>
-          <p class="mb-3 text-base"><strong>Vendedor: </strong><span data-testid="informe-vendedor">{{ c.vendedor.nombre }}</span> · {{ estadoVendedor[c.estado] }}</p>
-
-          <h3 class="mt-4 mb-1 font-bold text-navy">Cargas incluidas ({{ cargasInforme().length }})</h3>
-          <table class="table" data-testid="informe-cargas">
-            <thead><tr><th>Carga</th><th>Fecha</th><th>Camión</th><th class="num">Valor</th><th class="num">Abonado</th><th class="num">Saldo</th><th>Estado</th></tr></thead>
-            <tbody>
-              @for (x of cargasInforme(); track x.carga.id) {
-                <tr>
-                  <td class="font-mono">{{ x.carga.id }}</td>
-                  <td>{{ x.carga.fechaHora | fecha }}</td>
-                  <td class="font-mono">{{ x.placa }}</td>
-                  <td class="num">{{ x.carga.valorConsolidado | cop }}</td>
-                  <td class="num">{{ x.aplicado | cop }}</td>
-                  <td class="num">{{ x.saldo | cop }}</td>
-                  <td>{{ estadoPago[x.estadoPago] }}</td>
-                </tr>
-              }
-            </tbody>
-            <tfoot>
-              <tr class="font-bold">
-                <td colspan="3">Subtotal de las cargas incluidas</td>
-                <td class="num">{{ subtotalInforme().valor | cop }}</td>
-                <td class="num">{{ subtotalInforme().aplicado | cop }}</td>
-                <td class="num" data-testid="informe-subtotal-saldo">{{ subtotalInforme().saldo | cop }}</td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-
-          <h3 class="mt-4 mb-1 font-bold text-navy">Abonos y su aplicación</h3>
-          <table class="table" data-testid="informe-abonos">
-            <thead><tr><th>Abono</th><th>Fecha</th><th>Tipo</th><th>Referencia</th><th class="num">Monto</th><th>Aplicado a</th></tr></thead>
-            <tbody>
-              @for (a of abonosInforme(); track a.abono.id) {
-                <tr>
-                  <td class="font-mono">{{ a.abono.id }}</td>
-                  <td>{{ a.abono.fechaHora | fecha }}</td>
-                  <td>{{ a.abono.tipo === 'cobro_empresa' ? 'Cobro a la llave de la empresa' : 'Pago del vendedor' }}</td>
-                  <td>{{ a.abono.referencia || (a.abono.pago?.detalle ?? 'Sin referencia') }}</td>
-                  <td class="num">{{ a.abono.monto | cop }}</td>
-                  <td>{{ a.texto }}</td>
-                </tr>
-              } @empty {
-                <tr><td colspan="6" class="text-muted">Sin abonos a estas cargas.</td></tr>
-              }
-            </tbody>
-          </table>
-
-          <h3 class="mt-4 mb-1 font-bold text-navy">Dinero en poder del vendedor</h3>
-          <p class="text-sm">Efectivo {{ c.enPoder.efectivo | cop }} · llave del vendedor {{ c.enPoder.llaveVendedor | cop }} · total <strong>{{ c.enPoder.total | cop }}</strong></p>
-          <p class="text-sm">Pagado por el vendedor a la empresa: {{ c.pagosVendedor | cop }}</p>
-
-          <h3 class="mt-4 mb-1 font-bold text-navy">Totales de la cuenta</h3>
-          <table class="table max-w-md">
-            <tbody>
-              <tr><td>Total cargado</td><td class="num">{{ c.totalCargado | cop }}</td></tr>
-              <tr><td>Total abonado</td><td class="num">{{ c.totalAbonado | cop }}</td></tr>
-              <tr class="font-bold"><td>Saldo</td><td class="num" data-testid="informe-saldo">{{ c.saldoGeneral | cop }}</td></tr>
-              @if (c.saldoAFavor > 0) {
-                <tr><td>Saldo a favor</td><td class="num">{{ c.saldoAFavor | cop }}</td></tr>
-              }
-            </tbody>
-          </table>
-          <p class="mt-6 text-center text-xs font-bold tracking-widest text-navy">{{ disclaimer }}</p>
-        </div>
-      </div>
-    }
   `,
 })
 export class CuentaComponent {
   readonly store = inject(DemoStore);
-  private readonly router = inject(Router);
-  /** `?vendedor=VEN-…` (solo para la empresa; el vendedor lo ignora, E36). */
-  readonly vendedor = input<string>();
-  readonly disclaimer = DISCLAIMER;
+  /** `:vendedorId` (solo la empresa, V20; se valida contra su empresa, E09). */
+  readonly vendedorId = input<string>();
+  /** Dato de la ruta: `empresa` (V20) o `vendedor` (V26). */
+  readonly modo = input<'empresa' | 'vendedor'>('vendedor');
   readonly estadoPago = ESTADO_PAGO_LABEL;
   readonly estadoExistencias = ESTADO_EXISTENCIAS_LABEL;
   readonly estadoVendedor = ESTADO_VENDEDOR_LABEL;
@@ -312,82 +206,54 @@ export class CuentaComponent {
   readonly tonoVendedor = TONO_VENDEDOR;
   readonly medio = MEDIO_LABEL;
 
-  readonly esEmpresa = computed(() => this.store.perfil() === 'empresa');
-  readonly vendedores = computed(() => (this.esEmpresa() ? vendedoresDe(this.store.state(), this.store.empresaId() ?? '') : []));
-  readonly empresaNombre = computed(() => this.store.empresa()?.nombre ?? '');
+  readonly esEmpresa = computed(() => this.modo() === 'empresa');
 
   /** E09: un vendedor que no es de la empresa de la sesión no se muestra. */
   readonly ajeno = computed(() => {
-    const id = this.vendedor();
-    if (!this.esEmpresa() || !id) return null;
-    return this.vendedores().some((v) => v.id === id) ? null : `Ese vendedor no existe en ${this.empresaNombre()}`;
+    if (!this.esEmpresa()) return null;
+    const v = vendedorById(this.store.state(), this.vendedorId());
+    return v && v.empresaId === this.store.empresaId() ? null : `Ese vendedor no existe en ${this.store.empresa()?.nombre ?? ''}`;
   });
 
-  readonly vendedorId = computed<string | null>(() => {
-    if (!this.esEmpresa()) return this.store.perfilActivo()?.vendedorId ?? null;
-    if (this.ajeno()) return null;
-    const id = this.vendedor();
-    if (id) return id;
-    const s = this.store.state();
-    const vs = this.vendedores();
-    return (vs.find((v) => (cuentaVendedor(s, v.id)?.saldoGeneral ?? 0) > 0) ?? vs[0])?.id ?? null;
+  /** El vendedor de la ruta (empresa) o el de la sesión (vendedor, E36). */
+  readonly idVendedor = computed<string | null>(() => {
+    if (!this.esEmpresa()) return this.store.vendedorId();
+    return this.ajeno() ? null : (this.vendedorId() ?? null);
   });
 
   readonly cuenta = computed(() => {
-    const id = this.vendedorId();
+    const id = this.idVendedor();
     return id ? cuentaVendedor(this.store.state(), id) : null;
   });
 
+  readonly migas = computed<Miga[]>(() => [
+    { label: 'Cartera' },
+    { label: 'Cuentas de vendedores', link: '/empresa/cuentas' },
+    { label: this.cuenta()?.vendedor.nombre ?? this.vendedorId() ?? '' },
+  ]);
+
+  readonly rutaCarga = computed(() => (this.esEmpresa() ? '/empresa/cargues/' : '/vendedor/cargas/'));
+  readonly rutaInforme = computed(() => (this.esEmpresa() ? `/empresa/cuentas/${this.idVendedor()}/informe` : '/vendedor/informe'));
+  /** El informe lleva las cargas marcadas o, si no hay ninguna, todas (sin parámetro). */
+  readonly paramsInforme = computed(() => (this.seleccion().length ? { cargas: this.seleccion().join(',') } : {}));
+
   readonly seleccion = signal<string[]>([]);
   readonly abierta = signal<string | null>(null);
-  readonly informe = signal(false);
-  readonly ahora = signal(new Date().toISOString());
 
   readonly subtotal = computed(() => {
     const c = this.cuenta();
     return c ? subtotalSeleccion(c, this.seleccion()) : { valor: 0, aplicado: 0, saldo: 0 };
   });
 
-  /** El informe lleva las cargas marcadas o, si no hay ninguna, todas. */
-  readonly cargasInforme = computed(() => {
-    const c = this.cuenta();
-    if (!c) return [];
-    return this.seleccion().length ? c.cargas.filter((x) => this.seleccion().includes(x.carga.id)) : c.cargas;
-  });
-  readonly subtotalInforme = computed(() => {
-    const c = this.cuenta();
-    return c ? subtotalSeleccion(c, this.cargasInforme().map((x) => x.carga.id)) : { valor: 0, aplicado: 0, saldo: 0 };
-  });
-  readonly abonosInforme = computed(() => {
-    const c = this.cuenta();
-    if (!c) return [];
-    const ids = this.cargasInforme().map((x) => x.carga.id);
-    return c.abonos
-      .filter((a) => a.aplicaciones.some((x) => ids.includes(x.cargaId)) || (a.aplicaciones.length === 0 && ids.length === c.cargas.length))
-      .map((a) => ({
-        abono: a.abono,
-        texto:
-          [
-            ...a.aplicaciones.map((x) => `${x.cargaId} ${formatMoney(x.monto)} (${x.regla === 'origen' ? 'origen' : 'a la más antigua'})`),
-            ...(a.sinAplicar > 0 ? [`a favor ${formatMoney(a.sinAplicar)}`] : []),
-          ].join(' · ') || '—',
-      }));
-  });
-
   constructor() {
     // La selección y el detalle son de un vendedor: se limpian al cambiar de vendedor.
     effect(() => {
-      this.vendedorId();
+      this.idVendedor();
       untracked(() => {
         this.seleccion.set([]);
         this.abierta.set(null);
       });
     });
-  }
-
-  elegir(event: Event): void {
-    const id = (event.target as HTMLSelectElement).value;
-    this.router.navigate(['/cuenta'], { queryParams: { vendedor: id } });
   }
 
   marcar(id: string): void {
@@ -396,10 +262,5 @@ export class CuentaComponent {
 
   abrir(id: string): void {
     this.abierta.update((a) => (a === id ? null : id));
-  }
-
-  imprimir(): void {
-    this.ahora.set(new Date().toISOString());
-    window.print();
   }
 }

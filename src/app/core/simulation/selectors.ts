@@ -13,6 +13,7 @@ import {
   LineaVenta,
   MedioCobro,
   PagoVendedor,
+  Perfil,
   Presentacion,
   PresentacionId,
   PRESENTACIONES,
@@ -605,3 +606,92 @@ export const referenciasDe = (s: DemoState, vendedorId: string): ReferenciaAbono
       estado: c ? (c.conciliacion === 'confirmado' ? 'confirmado' : 'por_confirmar') : 'registrado',
     };
   });
+
+/* ---------------------------------------------------------------- R-14 usuarios de una empresa */
+
+const ORDEN_PERFIL: Record<Perfil, number> = { administrador: 0, empresa: 1, vendedor: 2, conductor: 3 };
+
+/** Perfil con el que se agrupa un usuario: el primero en el orden administrador, empresa, vendedor, conductor. */
+export const perfilPrincipal = (u: Usuario): Perfil =>
+  [...u.perfiles].sort((a, b) => ORDEN_PERFIL[a.perfil] - ORDEN_PERFIL[b.perfil])[0]?.perfil ?? 'conductor';
+
+/**
+ * R-14: usuarios con algún perfil de la empresa. Orden: perfil empresa, luego vendedor, luego
+ * conductor; dentro de cada grupo, por nombre. Un usuario con dos perfiles va una sola vez, en
+ * el grupo del primero.
+ */
+export const usuariosDeEmpresa = (s: DemoState, empresaId: string): Usuario[] =>
+  s.usuarios
+    .filter((u) => u.perfiles.some((p) => p.empresaId === empresaId))
+    .sort((a, b) => ORDEN_PERFIL[perfilPrincipal(a)] - ORDEN_PERFIL[perfilPrincipal(b)] || a.nombre.localeCompare(b.nombre, 'es'));
+
+/** R-14: usuarios activos con perfil empresa de la empresa. */
+export const usuariosEmpresaActivos = (s: DemoState, empresaId: string): Usuario[] =>
+  s.usuarios.filter((u) => u.activo && u.perfiles.some((p) => p.perfil === 'empresa' && p.empresaId === empresaId));
+
+/** «vendedor y conductor» (§1.6): los perfiles de un usuario en el orden de SUP-27. */
+export const perfilesTexto = (u: Pick<Usuario, 'perfiles'>): string => {
+  const ps = [...new Set(u.perfiles.map((p) => p.perfil))].sort((a, b) => ORDEN_PERFIL[a] - ORDEN_PERFIL[b]);
+  return ps.length > 1 ? `${ps.slice(0, -1).join(', ')} y ${ps[ps.length - 1]}` : (ps[0] ?? '');
+};
+
+/** Perfiles de un usuario con su alcance, para la tabla de usuarios (V05): «vendedor de Transportes Lucero», «conductor de GLK 101». */
+export const perfilesDetalle = (s: DemoState, u: Usuario): string[] =>
+  [...u.perfiles]
+    .sort((a, b) => ORDEN_PERFIL[a.perfil] - ORDEN_PERFIL[b.perfil])
+    .map((p) => {
+      if (p.perfil === 'vendedor') {
+        const negocio = vendedorById(s, p.vendedorId)?.nombre;
+        return negocio && negocio !== u.nombre ? `vendedor de ${negocio}` : 'vendedor';
+      }
+      if (p.perfil === 'conductor') {
+        const c = conductorById(s, p.conductorId);
+        return c ? `conductor de ${placaDe(s, c.vehiculoId)}` : 'conductor';
+      }
+      return p.perfil;
+    });
+
+/** Empresa de un usuario (SUP-27: una sola), o null para el administrador. */
+export const empresaDeUsuario = (u: Usuario | null | undefined): string | null => u?.perfiles.find((p) => p.empresaId)?.empresaId ?? null;
+
+/* ---------------------------------------------------------------- R-16 prerrequisitos guiados */
+
+/** R-16: existe una presentación activa de la empresa con valor unitario. */
+export const catalogoListo = (s: DemoState, empresaId: string): boolean =>
+  catalogo(s, empresaId).some((p) => p.activa && p.valorUnitario > 0);
+
+export interface FaltaVendedor {
+  camion: boolean;
+  conductor: boolean;
+}
+
+/** R-16: qué le falta a un vendedor para que la empresa le pueda cargar. */
+export const faltaVendedor = (s: DemoState, vendedorId: string): FaltaVendedor => ({
+  camion: !s.vehiculos.some((v) => v.vendedorId === vendedorId),
+  conductor: !s.conductores.some((c) => c.vendedorId === vendedorId),
+});
+
+export const vendedorListo = (s: DemoState, vendedorId: string): boolean => {
+  const f = faltaVendedor(s, vendedorId);
+  return !f.camion && !f.conductor;
+};
+
+export interface PrerrequisitosCargue {
+  catalogo: boolean;
+  flota: boolean;
+  llave: boolean;
+  /** Solo catálogo y flota bloquean; la llave solo avisa (SUP-26). */
+  puedeCargar: boolean;
+}
+
+export const prerrequisitosCargue = (s: DemoState, empresaId: string): PrerrequisitosCargue => {
+  const cat = catalogoListo(s, empresaId);
+  const flota = vendedoresDe(s, empresaId).some((v) => vendedorListo(s, v.id));
+  return { catalogo: cat, flota, llave: !!empresaById(s, empresaId)?.llave, puedeCargar: cat && flota };
+};
+
+/** R-16: el camión del conductor tiene al menos una carga. */
+export const puedeVender = (s: DemoState, conductorId: string | null | undefined): boolean => {
+  const c = conductorById(s, conductorId);
+  return !!c && cargasDeCamion(s, c.vehiculoId).length > 0;
+};

@@ -1,18 +1,23 @@
 import { inject } from '@angular/core';
 import { CanMatchFn, Router } from '@angular/router';
 import { DemoStore } from '../state/demo.store';
-import { homeFor, NO_ACCESS_MESSAGE, ViewId } from './access';
+import { NO_ACCESS_MESSAGE, ViewId } from './access';
 
 /**
- * Guarda de las vistas (§1.2): sin sesión lleva a /ingreso (E05); con un perfil sin acceso
- * lleva a la pantalla de inicio del perfil con el aviso «Tu perfil no tiene acceso a esa
- * pantalla» (E04). Las vistas vedadas tampoco aparecen en el menú.
+ * Guarda de las pantallas (§1.5):
+ * - sin sesión, o con la sesión de un usuario que ya no existe o está inactivo → /ingreso (E05, R-15);
+ * - con una pantalla que ninguno de los perfiles del usuario puede ver → su pantalla de inicio,
+ *   con el aviso «Tu perfil no tiene acceso a esa pantalla» (E04).
+ * Las pantallas vedadas tampoco aparecen en el menú ☰.
  */
 export const accessGuard: CanMatchFn = (route) => {
   const store = inject(DemoStore);
   const router = inject(Router);
-  const perfil = store.perfil();
-  if (!perfil) {
+  const usuario = store.usuario();
+  if (!usuario || !usuario.activo) {
+    if (usuario) {
+      store.cerrarSesion();
+    }
     return router.parseUrl('/ingreso');
   }
   const view = route.data?.['view'] as ViewId | undefined;
@@ -20,5 +25,5 @@ export const accessGuard: CanMatchFn = (route) => {
     return true;
   }
   store.flash.set({ kind: 'warning', text: NO_ACCESS_MESSAGE });
-  return router.parseUrl(homeFor(perfil));
+  return router.parseUrl(store.inicio());
 };

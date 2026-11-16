@@ -1,37 +1,50 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
 import { PresentacionId } from '../../core/simulation/model';
 import {
-  byTime,
   catalogo,
-  configuracionCompleta,
-  conductorNombre,
   cuentaVendedor,
-  ESTADO_EXISTENCIAS_LABEL,
-  ESTADO_PAGO_LABEL,
-  placaDe,
+  faltaVendedor,
+  prerrequisitosCargue,
   totalesCarga,
   vendedorNombre,
   vendedoresDe,
 } from '../../core/simulation/selectors';
 import { DemoStore } from '../../core/state/demo.store';
-import { BadgeComponent, IlustrativoComponent } from '../../shared/badges.component';
-import { CodeTextComponent } from '../../shared/code-text.component';
-import { CopPipe, FechaPipe, KgPipe } from '../../shared/pipes';
+import { IlustrativoComponent } from '../../shared/badges.component';
+import { MigasComponent } from '../../shared/migas.component';
+import { CopPipe, KgPipe } from '../../shared/pipes';
 
 /**
- * V05 · Cargue (F05; RN-02, RN-03, RN-12): vendedor → camión del vendedor → conductor del
- * vendedor → cantidades enteras. La vista previa calcula en vivo el peso y el valor
- * consolidado (R-01); al registrar, la carga suma a la deuda del vendedor.
+ * V17 · Nuevo cargue (F05; RN-02, RN-03, RN-12, R-16): vendedor → camión del vendedor →
+ * conductor del vendedor → cantidades enteras. La vista previa calcula en vivo el peso y el
+ * valor consolidado (R-01); al registrar, la carga suma a la deuda del vendedor y se abre su
+ * detalle (V18). Si falta el catálogo con precios o un vendedor con camión y conductor, dice qué
+ * falta y enlaza a donde se configura; la falta de llave solo avisa (SUP-26).
  */
 @Component({
-  selector: 'app-cargue',
-  imports: [BadgeComponent, IlustrativoComponent, CodeTextComponent, CopPipe, FechaPipe, KgPipe],
+  selector: 'app-nuevo-cargue',
+  imports: [RouterLink, IlustrativoComponent, MigasComponent, CopPipe, KgPipe],
   template: `
-    <h1 class="page-title mb-3">Cargue</h1>
-    @if (!completa()) {
-      <p class="warning-text mb-3" data-testid="aviso-configuracion">
-        Configuración pendiente: las presentaciones sin valor unitario no se pueden cargar. Complétalas en «Catálogo y llave».
-      </p>
+    <app-migas [items]="[{ label: 'Operación' }, { label: 'Cargues', link: '/empresa/cargues' }, { label: 'Nuevo cargue' }]" />
+    <h1 class="page-title mb-3">Nuevo cargue</h1>
+    @if (!pre().catalogo) {
+      <div class="warning-text mb-2" data-testid="prerrequisito-catalogo">
+        Falta el valor unitario de los cilindros en el catálogo ·
+        <a class="font-semibold underline" routerLink="/empresa/configuracion/catalogo" data-testid="prerrequisito-catalogo-enlace">Catálogo de cilindros</a>
+      </div>
+    }
+    @if (!pre().flota) {
+      <div class="warning-text mb-2" data-testid="prerrequisito-flota">
+        Falta un vendedor con camión y conductor ·
+        <a class="font-semibold underline" routerLink="/empresa/flota/vendedores" data-testid="prerrequisito-flota-enlace">Vendedores</a>
+      </div>
+    }
+    @if (!pre().llave) {
+      <div class="warning-text mb-2" data-testid="prerrequisito-llave">
+        Tu empresa no tiene llave de cobro: los conductores no podrán mostrar el QR de la empresa ·
+        <a class="font-semibold underline" routerLink="/empresa/configuracion/llave" data-testid="prerrequisito-llave-enlace">Llave de cobro</a>
+      </div>
     }
     <div class="grid gap-4 lg:grid-cols-[1fr_24rem]">
       <form class="card" (submit)="$event.preventDefault(); registrar()" data-testid="form-cargue">
@@ -41,7 +54,9 @@ import { CopPipe, FechaPipe, KgPipe } from '../../shared/pipes';
             <select id="car-vendedor" class="input" data-testid="cargue-vendedor" [value]="vendedorId()" (change)="elegirVendedor(val($event))">
               <option value="">Elige…</option>
               @for (v of vendedores(); track v.id) {
-                <option [value]="v.id" [selected]="v.id === vendedorId()">{{ v.nombre }}</option>
+                <option [value]="v.id" [selected]="v.id === vendedorId()" [disabled]="!!v.falta" [attr.data-testid]="'opcion-vendedor-' + v.id">
+                  {{ v.nombre }}{{ v.falta ? ' · ' + v.falta : '' }}
+                </option>
               }
             </select>
           </div>
@@ -119,10 +134,24 @@ import { CopPipe, FechaPipe, KgPipe } from '../../shared/pipes';
           }
         </div>
 
+        @if (noListos().length) {
+          <ul class="mt-3 list-none space-y-1 p-0 text-xs text-muted" data-testid="vendedores-no-listos">
+            @for (v of noListos(); track v.id) {
+              <li [attr.data-testid]="'vendedor-no-listo-' + v.id">
+                {{ v.nombre }}: {{ v.falta }} ·
+                <a class="text-primary underline" [routerLink]="'/empresa/flota/vendedores/' + v.id">ver su detalle</a>
+              </li>
+            }
+          </ul>
+        }
+
         @if (error(); as e) {
           <p class="error-text" data-testid="error-cargue" role="alert">{{ e }}</p>
         }
-        <button type="submit" class="btn btn-primary mt-3 w-full sm:w-auto" data-testid="registrar-carga">Registrar carga</button>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button type="submit" class="btn btn-primary flex-1 sm:flex-none" data-testid="registrar-carga" [disabled]="!pre().puedeCargar">Registrar carga</button>
+          <a class="btn" routerLink="/empresa/cargues" data-testid="cancelar">Cancelar</a>
+        </div>
       </form>
 
       <section class="card">
@@ -142,37 +171,11 @@ import { CopPipe, FechaPipe, KgPipe } from '../../shared/pipes';
       </section>
     </div>
 
-    <section class="card mt-4 overflow-x-auto">
-      <h2 class="card-title">Últimas cargas</h2>
-      <table class="table" data-testid="tabla-cargas">
-        <thead>
-          <tr>
-            <th>Carga</th><th>Fecha</th><th>Vendedor</th><th>Camión</th><th>Conductor</th><th class="num">Peso</th><th class="num">Valor</th><th>Pago</th><th>Existencias</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (c of ultimas(); track c.id) {
-            <tr [attr.data-testid]="'carga-' + c.id">
-              <td class="font-mono whitespace-nowrap">{{ c.id }}</td>
-              <td class="whitespace-nowrap">{{ c.fechaHora | fecha }}</td>
-              <td>{{ c.vendedor }}</td>
-              <td class="font-mono whitespace-nowrap">{{ c.placa }}</td>
-              <td>{{ c.conductor }}</td>
-              <td class="num">{{ c.pesoTotalDecimasKg | kg }}</td>
-              <td class="num">{{ c.valorConsolidado | cop }}</td>
-              <td><app-badge [tone]="c.pagoTone" [attr.data-testid]="'estado-' + c.id">{{ c.pago }}</app-badge></td>
-              <td><app-badge [tone]="c.existencias === 'Sobrevendida' ? 'warn' : 'neutral'">{{ c.existencias }}</app-badge></td>
-            </tr>
-          } @empty {
-            <tr><td colspan="9"><app-code-text text="Todavía no hay cargas en esta empresa." /></td></tr>
-          }
-        </tbody>
-      </table>
-    </section>
   `,
 })
-export class CargueComponent {
+export class NuevoCargueComponent {
   readonly store = inject(DemoStore);
+  private readonly router = inject(Router);
   private readonly empresaId = computed(() => this.store.empresaId() ?? '');
 
   readonly vendedorId = signal('');
@@ -181,9 +184,18 @@ export class CargueComponent {
   readonly cantidades = signal<Partial<Record<PresentacionId, string>>>({});
   readonly error = signal<string | null>(null);
 
-  readonly completa = computed(() => configuracionCompleta(this.store.state(), this.empresaId()));
+  /** R-16: qué falta para cargar. */
+  readonly pre = computed(() => prerrequisitosCargue(this.store.state(), this.empresaId()));
   readonly cat = computed(() => catalogo(this.store.state(), this.empresaId()));
-  readonly vendedores = computed(() => vendedoresDe(this.store.state(), this.empresaId()));
+  /** Vendedores con lo que les falta («Sin camión», «Sin conductor»); los que no están listos no se eligen (E60). */
+  readonly vendedores = computed(() => {
+    const s = this.store.state();
+    return vendedoresDe(s, this.empresaId()).map((v) => {
+      const f = faltaVendedor(s, v.id);
+      return { ...v, falta: f.camion ? 'Sin camión' : f.conductor ? 'Sin conductor' : null };
+    });
+  });
+  readonly noListos = computed(() => this.vendedores().filter((v) => !!v.falta));
   readonly camiones = computed(() => this.store.state().vehiculos.filter((v) => v.empresaId === this.empresaId() && v.vendedorId === this.vendedorId()));
   readonly conductores = computed(() => this.store.state().conductores.filter((c) => c.empresaId === this.empresaId() && c.vendedorId === this.vendedorId()));
   readonly nombreVendedor = computed(() => vendedorNombre(this.store.state(), this.vendedorId()));
@@ -199,28 +211,6 @@ export class CargueComponent {
       })
       .filter((l) => l.unidades > 0);
     return { lineas, ...totalesCarga(lineas) };
-  });
-
-  readonly ultimas = computed(() => {
-    const s = this.store.state();
-    const tono = { pendiente: 'neutral', abonada: 'warn', saldada: 'ok' } as const;
-    return s.cargas
-      .filter((c) => c.empresaId === this.empresaId())
-      .sort(byTime)
-      .reverse()
-      .slice(0, 10)
-      .map((c) => {
-        const cc = cuentaVendedor(s, c.vendedorId)?.cargas.find((x) => x.carga.id === c.id);
-        return {
-          ...c,
-          vendedor: vendedorNombre(s, c.vendedorId),
-          placa: placaDe(s, c.vehiculoId),
-          conductor: conductorNombre(s, c.conductorId),
-          pago: cc ? ESTADO_PAGO_LABEL[cc.estadoPago] : '—',
-          pagoTone: cc ? tono[cc.estadoPago] : ('neutral' as const),
-          existencias: cc ? ESTADO_EXISTENCIAS_LABEL[cc.estadoExistencias] : '—',
-        };
-      });
   });
 
   val(event: Event): string {
@@ -256,7 +246,7 @@ export class CargueComponent {
     );
     this.error.set(r.ok ? null : r.error);
     if (r.ok) {
-      this.cantidades.set({});
+      this.router.navigateByUrl(`/empresa/cargues/${r.value.id}`);
     }
   }
 }

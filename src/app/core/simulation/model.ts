@@ -7,7 +7,7 @@
  */
 
 /** Versión del esquema persistido: si cambia, el estado guardado se descarta y se usa la semilla. */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export type Perfil = 'administrador' | 'empresa' | 'vendedor' | 'conductor';
 
@@ -87,7 +87,7 @@ export interface Conductor {
   usuarioId: string;
 }
 
-/** Un perfil de un usuario, con el alcance de datos que le corresponde (SUP-11). */
+/** Un perfil de un usuario, con el alcance de datos que le corresponde (SUP-11, SUP-27). */
 export interface PerfilUsuario {
   perfil: Perfil;
   empresaId?: string;
@@ -100,7 +100,10 @@ export interface Usuario {
   id: string;
   usuario: string;
   nombre: string;
+  /** Uno o dos perfiles, de una sola empresa (SUP-11, SUP-27). */
   perfiles: PerfilUsuario[];
+  /** Un usuario inactivo no ingresa (SUP-23). Lo cambia el administrador (R-14). */
+  activo: boolean;
 }
 
 /** Línea de una carga: copia del catálogo al registrar (SUP-15). */
@@ -150,7 +153,7 @@ export interface Venta {
   lineas: LineaVenta[];
   /** Libre (RN-05). Sin datos del cliente (RN-06). */
   valor: number;
-  /** Lo que se mostró en V07 (null mientras no se haya mostrado un QR). */
+  /** Lo que se mostró en el cobro con QR (V34; null mientras no se haya mostrado un QR). */
   qr: QrElegido | null;
   montoQrEmpresa: number;
   montoQrVendedor: number;
@@ -198,10 +201,12 @@ export interface PagoVendedor {
   registradoPor: string;
 }
 
+/**
+ * Sesión por usuario (R-15): la única pieza es el usuario. Sus perfiles, su empresa, su
+ * vendedor y su conductor se derivan de él; ya no hay perfil activo.
+ */
 export interface Sesion {
   usuarioId: string | null;
-  /** Perfil activo del usuario (SUP-11). */
-  perfil: Perfil | null;
 }
 
 /** Consecutivos por empresa: CAR, VTA, COB, PAG, VEN, VEH, CDT (§0). */

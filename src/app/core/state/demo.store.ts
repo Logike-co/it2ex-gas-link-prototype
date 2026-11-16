@@ -1,8 +1,9 @@
 import { computed, inject, Injectable, InjectionToken, signal } from '@angular/core';
-import { AccessAction, can, canView, ViewId } from '../access/access';
+import { AccessAction, can, canView, inicioDe, menuDe, MenuSeccion, ViewId } from '../access/access';
 import { Clock, SystemClock } from '../simulation/clock';
 import { Simulator } from '../simulation/engine';
-import { DemoState, Empresa, Perfil, PerfilUsuario, Result, SCHEMA_VERSION, Usuario } from '../simulation/model';
+import { DemoState, Empresa, Perfil, Result, SCHEMA_VERSION, Usuario } from '../simulation/model';
+import { empresaDeUsuario } from '../simulation/selectors';
 import { buildSeed } from '../simulation/seed';
 
 /** Reloj de la demo. Las pruebas lo sustituyen por un `FixedClock`. */
@@ -42,25 +43,32 @@ export class DemoStore {
     return s.usuarios.find((u) => u.id === s.sesion.usuarioId) ?? null;
   });
 
-  /** Perfil activo con su alcance de datos (empresa, vendedor, conductor). */
-  readonly perfilActivo = computed<PerfilUsuario | null>(() => {
-    const u = this.usuario();
-    return u?.perfiles.find((p) => p.perfil === this.state().sesion.perfil) ?? null;
-  });
+  /** R-15: la sesión tiene la unión de los perfiles del usuario. */
+  readonly perfiles = computed<Perfil[]>(() => [...new Set((this.usuario()?.perfiles ?? []).map((p) => p.perfil))]);
 
-  readonly perfil = computed<Perfil | null>(() => this.perfilActivo()?.perfil ?? null);
-
-  /** La empresa activa sale de la sesión, nunca de la URL (§1.4, RN-01). */
-  readonly empresaId = computed<string | null>(() => this.perfilActivo()?.empresaId ?? null);
+  /** La empresa de la sesión sale de los perfiles del usuario, nunca de la URL (§1.8, RN-01, SUP-27). */
+  readonly empresaId = computed<string | null>(() => empresaDeUsuario(this.usuario()));
 
   readonly empresa = computed<Empresa | null>(() => this.state().empresas.find((e) => e.id === this.empresaId()) ?? null);
 
+  /** Vendedor del perfil vendedor del usuario, o null. */
+  readonly vendedorId = computed<string | null>(() => this.usuario()?.perfiles.find((p) => p.perfil === 'vendedor')?.vendedorId ?? null);
+
+  /** Conductor del perfil conductor del usuario, o null. */
+  readonly conductorId = computed<string | null>(() => this.usuario()?.perfiles.find((p) => p.perfil === 'conductor')?.conductorId ?? null);
+
+  /** Menú ☰ del usuario (R-15): secciones de sus perfiles, en orden. */
+  readonly menu = computed<MenuSeccion[]>(() => menuDe(this.perfiles()));
+
+  /** Pantalla de inicio del usuario: la primera opción del menú (SUP-24). */
+  readonly inicio = computed<string>(() => inicioDe(this.perfiles()));
+
   can(action: AccessAction): boolean {
-    return can(this.perfil(), action);
+    return can(this.perfiles(), action);
   }
 
   canView(view: ViewId): boolean {
-    return canView(this.perfil(), view);
+    return canView(this.perfiles(), view);
   }
 
   /** Ejecuta un comando del motor sobre una copia y guarda el resultado. */
@@ -85,8 +93,8 @@ export class DemoStore {
     return result;
   }
 
-  iniciarSesion(usuarioId: string, perfil?: Perfil): Result<{ usuario: Usuario; perfil: PerfilUsuario }> {
-    return this.run((sim) => sim.iniciarSesion(usuarioId, perfil));
+  iniciarSesion(usuarioId: string): Result<Usuario> {
+    return this.run((sim) => sim.iniciarSesion(usuarioId));
   }
 
   cerrarSesion(): void {
@@ -95,15 +103,14 @@ export class DemoStore {
 
   /**
    * «Reiniciar demo» (§5.7, SUP-21): un clic, sin diálogo. Vuelve a la semilla; la sesión
-   * sigue si su usuario y su perfil existen en la semilla. Devuelve si la sesión se conservó.
+   * sigue si su usuario existe en la semilla y está activo. Devuelve si la sesión se conservó.
    */
   reset(): boolean {
     const seed = buildSeed(this.clock);
-    const { usuarioId, perfil } = this.state().sesion;
-    const user = seed.usuarios.find((u) => u.id === usuarioId);
-    const kept = !!user && user.perfiles.some((p) => p.perfil === perfil);
+    const { usuarioId } = this.state().sesion;
+    const kept = seed.usuarios.some((u) => u.id === usuarioId && u.activo);
     if (kept) {
-      seed.sesion = { usuarioId, perfil };
+      seed.sesion = { usuarioId };
     }
     this.commit(seed);
     this.flash.set({ kind: 'ok', text: RESET_MESSAGE });
@@ -119,12 +126,20 @@ export class DemoStore {
     }
   }
 
+  /**
+   * Estado guardado o semilla. Un estado de otra versión del esquema se descarta (§8.6); si la
+   * sesión guardada es de un usuario que ya no existe o está inactivo, se cierra (R-15).
+   */
   private loadOrSeed(): DemoState {
     try {
       const raw = localStorage.getItem(STATE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as DemoState;
-        if (parsed.schemaVersion === SCHEMA_VERSION && Array.isArray(parsed.empresas)) {
+        if (parsed.schemaVersion === SCHEMA_VERSION && Array.isArray(parsed.empresas) && Array.isArray(parsed.usuarios)) {
+          const id = parsed.sesion?.usuarioId ?? null;
+          if (!parsed.usuarios.some((u) => u.id === id && u.activo)) {
+            parsed.sesion = { usuarioId: null };
+          }
           return parsed;
         }
       }

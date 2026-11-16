@@ -1,26 +1,35 @@
 import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { formatMoney, parsePesos } from '../../core/simulation/format';
 import { QrElegido } from '../../core/simulation/model';
-import { byTime, empresaById, resumenVenta, vendedorById, ventaById } from '../../core/simulation/selectors';
+import { empresaById, resumenVenta, vendedorById, ventaById } from '../../core/simulation/selectors';
 import { DemoStore } from '../../core/state/demo.store';
+import { MigasComponent } from '../../shared/migas.component';
+import { ParamAjenoComponent } from '../../shared/param-ajeno.component';
 import { CopPipe } from '../../shared/pipes';
 import { QrMuestraComponent } from '../../shared/qr-muestra.component';
 
 /**
- * V07 · Cobro con QR (F06, F06b; RN-07, S-08). El conductor elige el QR de la empresa, el del
- * vendedor o ambos, reparte el monto y muestra QR de muestra generados en el navegador. Esta
- * pantalla no crea cobros: «Registrar lo recibido» lleva a V08 con las líneas prellenadas.
+ * V34 · Cobro con QR (F06, F06b; RN-07, S-08). Siempre sale de una venta (la de la ruta, R-16):
+ * el conductor elige el QR de la empresa, el del vendedor o ambos, reparte el monto y muestra QR
+ * de muestra generados en el navegador. Esta pantalla no crea cobros: «Registrar lo recibido»
+ * lleva al registro de montos (V35) con las líneas prellenadas.
  */
 @Component({
   selector: 'app-cobro',
-  imports: [CopPipe, QrMuestraComponent],
+  imports: [RouterLink, MigasComponent, ParamAjenoComponent, CopPipe, QrMuestraComponent],
   template: `
     <div class="mx-auto max-w-lg">
+      <app-migas
+        [items]="[
+          { label: 'Venta en calle' },
+          { label: 'Mis ventas', link: '/conductor/ventas' },
+          { label: ventaId() ?? '', link: '/conductor/ventas/' + ventaId() },
+          { label: 'Cobro con QR' },
+        ]"
+      />
       <h1 class="page-title mb-3">Cobro con QR</h1>
-      @if (noEsTuya()) {
-        <p class="error-text" data-testid="venta-ajena">Esa venta no existe o no es tuya. Abre «Nueva venta» para ver tus ventas.</p>
-      } @else if (resumen(); as r) {
+      @if (resumen(); as r) {
         <section class="card mb-3" data-testid="cobro-venta">
           <div class="flex flex-wrap items-baseline gap-x-3">
             <span class="font-mono font-bold" data-testid="cobro-venta-id">{{ r.venta.id }}</span>
@@ -90,13 +99,14 @@ import { QrMuestraComponent } from '../../shared/qr-muestra.component';
           </section>
         }
 
-        <div class="sticky bottom-0 bg-surface-alt pt-2 pb-3">
-          <button type="button" class="btn btn-primary btn-lg w-full" data-testid="registrar-recibido" [disabled]="!!reparto().error" (click)="registrarRecibido()">
+        <div class="sticky bottom-0 flex gap-2 bg-surface-alt pt-2 pb-3">
+          <button type="button" class="btn btn-primary btn-lg flex-1" data-testid="registrar-recibido" [disabled]="!!reparto().error" (click)="registrarRecibido()">
             Registrar lo recibido
           </button>
+          <a class="btn btn-lg" [routerLink]="'/conductor/ventas/' + r.venta.id" data-testid="volver-venta">Volver a la venta</a>
         </div>
       } @else {
-        <p class="card text-sm text-muted" data-testid="sin-ventas-por-cobrar">No tienes ventas por cobrar.</p>
+        <app-param-ajeno texto="Esa venta no está entre tus ventas" enlace="Mis ventas" link="/conductor/ventas" />
       }
     </div>
   `,
@@ -104,29 +114,16 @@ import { QrMuestraComponent } from '../../shared/qr-muestra.component';
 export class CobroComponent {
   readonly store = inject(DemoStore);
   private readonly router = inject(Router);
-  /** `?venta=VTA-…` */
-  readonly venta = input<string>();
+  /** `:ventaId` (validada contra el conductor de la sesión, §1.5). */
+  readonly ventaId = input<string>();
 
-  private readonly conductorId = computed(() => this.store.perfilActivo()?.conductorId ?? '');
+  private readonly conductorId = computed(() => this.store.conductorId() ?? '');
 
-  readonly noEsTuya = computed(() => {
-    const v = ventaById(this.store.state(), this.venta());
-    return !!this.venta() && (!v || v.conductorId !== this.conductorId());
-  });
-
-  /** La venta pedida o, sin parámetro, la última del conductor por cobrar o con cobro parcial. */
+  /** La venta de la ruta, si es del conductor de la sesión. */
   readonly resumen = computed(() => {
     const s = this.store.state();
-    if (this.venta()) {
-      const v = ventaById(s, this.venta());
-      return v && v.conductorId === this.conductorId() ? resumenVenta(s, v) : null;
-    }
-    const pendientes = s.ventas
-      .filter((v) => v.conductorId === this.conductorId())
-      .map((v) => resumenVenta(s, v))
-      .filter((r) => r.estado !== 'cobrada')
-      .sort((a, b) => byTime(a.venta, b.venta));
-    return pendientes[pendientes.length - 1] ?? null;
+    const v = ventaById(s, this.ventaId());
+    return v && v.conductorId === this.conductorId() ? resumenVenta(s, v) : null;
   });
 
   /** Id de la venta en pantalla: el reparto se reinicia solo cuando cambia. */
@@ -206,6 +203,6 @@ export class CobroComponent {
       const res = this.store.exec((sim) => sim.registrarReparto(this.conductorId(), r.venta.id, q, this.reparto().empresa, this.reparto().vendedor));
       if (!res.ok) return;
     }
-    this.router.navigate(['/conductor/montos'], { queryParams: { venta: r.venta.id } });
+    this.router.navigateByUrl(`/conductor/ventas/${r.venta.id}/montos`);
   }
 }

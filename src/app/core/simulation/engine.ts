@@ -20,7 +20,6 @@ import {
   MedioCobro,
   ok,
   PagoVendedor,
-  Perfil,
   PerfilUsuario,
   Prefijo,
   PresentacionId,
@@ -45,6 +44,7 @@ import {
   resumenVenta,
   totalesCarga,
   usuarioById,
+  usuariosEmpresaActivos,
   vehiculoById,
   vendedorById,
   ventaById,
@@ -58,6 +58,14 @@ export interface NuevaEmpresa {
   nombreUsuario: string;
   usuario: string;
 }
+
+export interface NuevoUsuarioEmpresa {
+  nombre: string;
+  usuario: string;
+}
+
+/** Aviso de SUP-23 al intentar entrar con un usuario inactivo. */
+export const USUARIO_INACTIVO = 'Este usuario está inactivo. Pídele al administrador de la plataforma que lo active';
 
 export interface FilaCatalogo {
   presentacionId: PresentacionId;
@@ -178,28 +186,28 @@ export class Simulator {
     for (let i = 2; this.state.usuarios.some((u) => u.id === id); i++) {
       id = `usr-${usuario}-${i}`;
     }
-    const u: Usuario = { id, usuario, nombre, perfiles };
+    const u: Usuario = { id, usuario, nombre, perfiles, activo: true };
     this.state.usuarios.push(u);
     return u;
   }
 
-  /* ------------------------------------------------------------ sesión (D01) */
+  /* ------------------------------------------------------------ sesión (D01, R-15) */
 
-  iniciarSesion(usuarioId: string, perfil?: Perfil): Result<{ usuario: Usuario; perfil: PerfilUsuario }> {
+  /** R-15: la sesión es del usuario, con la unión de sus perfiles; un usuario inactivo no entra (SUP-23). */
+  iniciarSesion(usuarioId: string): Result<Usuario> {
     const u = usuarioById(this.state, usuarioId);
     if (!u) {
       return fail('Ese usuario no existe en la demo');
     }
-    const p = perfil ? u.perfiles.find((x) => x.perfil === perfil) : u.perfiles[0];
-    if (!p) {
-      return fail(`${u.nombre} no tiene el perfil ${perfil}`);
+    if (!u.activo) {
+      return fail(USUARIO_INACTIVO);
     }
-    this.state.sesion = { usuarioId: u.id, perfil: p.perfil };
-    return ok({ usuario: u, perfil: p });
+    this.state.sesion = { usuarioId: u.id };
+    return ok(u);
   }
 
   cerrarSesion(): void {
-    this.state.sesion = { usuarioId: null, perfil: null };
+    this.state.sesion = { usuarioId: null };
   }
 
   /* ------------------------------------------------------------ F01 empresas */
@@ -232,6 +240,42 @@ export class Simulator {
     this.state.empresas.push(empresa);
     this.state.presentaciones.push(...catalogoInicial(id));
     return ok(empresa, `Empresa ${id} · ${nombre} creada con el usuario ${usuario}`);
+  }
+
+  /* ------------------------------------------------------------ F01 usuarios de la empresa (R-14) */
+
+  /** R-14: el administrador crea usuarios con perfil empresa; nacen activos. */
+  crearUsuarioEmpresa(empresaId: string, input: NuevoUsuarioEmpresa): Result<Usuario> {
+    const empresa = empresaById(this.state, empresaId);
+    if (!empresa) return fail('Esa empresa no existe');
+    const nombre = input.nombre.trim();
+    const usuario = input.usuario.trim().toLowerCase();
+    if (!nombre) return fail('Escribe el nombre de la persona');
+    if (!usuario) return fail('Escribe el usuario');
+    if (!/^[a-z0-9._-]+$/.test(usuario)) return fail('El usuario no puede tener espacios ni tildes');
+    if (this.state.usuarios.some((u) => u.usuario === usuario)) return fail('Ese usuario ya existe');
+    const u = this.crearUsuario(nombre, usuario, [{ perfil: 'empresa', empresaId }]);
+    return ok(u, `Usuario ${usuario} creado en ${empresa.nombre}`);
+  }
+
+  /**
+   * R-14: activar o desactivar un usuario. Desactivar solo impide el ingreso (SUP-25); no se
+   * desactiva el último usuario empresa activo de una empresa (SUP-22).
+   */
+  cambiarEstadoUsuario(usuarioId: string, activo: boolean): Result<Usuario> {
+    const u = usuarioById(this.state, usuarioId);
+    if (!u) return fail('Ese usuario no existe en la demo');
+    if (!activo) {
+      for (const p of u.perfiles.filter((x) => x.perfil === 'empresa' && x.empresaId)) {
+        const activos = usuariosEmpresaActivos(this.state, p.empresaId as string);
+        if (activos.length === 1 && activos[0].id === u.id) {
+          const empresa = empresaById(this.state, p.empresaId);
+          return fail(`${empresa?.nombre ?? p.empresaId} debe tener al menos un usuario empresa activo`);
+        }
+      }
+    }
+    u.activo = activo;
+    return ok(u, `${u.nombre} ${activo ? 'activado' : 'desactivado'}`);
   }
 
   /* ------------------------------------------------------------ F02 catálogo */
@@ -418,7 +462,7 @@ export class Simulator {
     );
   }
 
-  /** V07: guarda el QR mostrado y el reparto sugerido; no crea cobros. */
+  /** V34: guarda el QR mostrado y el reparto sugerido; no crea cobros. */
   registrarReparto(conductorId: string, ventaId: string, qr: QrElegido, montoEmpresa: number, montoVendedor: number): Result<Venta> {
     const venta = ventaById(this.state, ventaId);
     if (!venta || venta.conductorId !== conductorId) return fail('Esa venta no es tuya');

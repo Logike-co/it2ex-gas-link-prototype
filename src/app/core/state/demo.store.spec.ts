@@ -72,14 +72,32 @@ describe('DemoStore (persistencia y reinicio, §8 y ALC-05)', () => {
     expect(store.usuario()).toBeNull();
   });
 
-  it('la empresa activa sale de la sesión y el perfil activo define el alcance (SUP-11)', () => {
+  it('R-15: la sesión es del usuario con la unión de sus perfiles; empresa, vendedor y conductor salen de ellos', () => {
     const store = createStore();
-    store.iniciarSesion('usr-ramiro', 'conductor');
-    expect([store.perfil(), store.empresaId(), store.perfilActivo()?.conductorId]).toEqual(['conductor', 'EMP-A', 'CDT-A1']);
-    expect(store.canView('V06')).toBe(true);
-    expect(store.canView('V09')).toBe(false);
-    store.iniciarSesion('usr-ramiro', 'vendedor');
-    expect([store.canView('V09'), store.can('pago.registrar')]).toEqual([true, false]);
+    store.iniciarSesion('usr-ramiro');
+    expect([store.perfiles(), store.empresaId(), store.vendedorId(), store.conductorId()]).toEqual([['vendedor', 'conductor'], 'EMP-A', 'VEN-A1', 'CDT-A1']);
+    expect([store.canView('V26'), store.canView('V30'), store.canView('V16')]).toEqual([true, true, false]);
+    expect([store.can('venta.registrar'), store.can('pago.registrar')]).toEqual([true, false]);
+    expect(store.inicio()).toBe('/vendedor/cuenta');
+    store.iniciarSesion('usr-andrea');
+    expect([store.empresaId(), store.vendedorId(), store.inicio()]).toEqual([null, null, '/admin/empresas']);
+  });
+
+  it('SUP-23: un usuario inactivo no entra; al cargar, una sesión guardada de un inactivo se cierra', () => {
+    const store = createStore();
+    store.iniciarSesion('usr-wilson');
+    store.exec((sim) => sim.cambiarEstadoUsuario('usr-wilson', false));
+    const r = store.iniciarSesion('usr-wilson');
+    expect(r.ok).toBe(false);
+    expect(createStore().usuario()).toBeNull();
+  });
+
+  it('§8.6: un estado guardado con el esquema de la v1 (sesión con perfil) se descarta', () => {
+    localStorage.setItem(STATE_KEY, JSON.stringify({ ...createStore().state(), schemaVersion: 1, sesion: { usuarioId: 'usr-ramiro', perfil: 'conductor' } }));
+    const store = createStore();
+    expect(store.state().schemaVersion).toBe(2);
+    expect(store.usuario()).toBeNull();
+    expect(store.state().usuarios.every((u) => u.activo)).toBe(true);
   });
 
   it('ignora un estado guardado corrupto o de otra versión y vuelve a la semilla', () => {

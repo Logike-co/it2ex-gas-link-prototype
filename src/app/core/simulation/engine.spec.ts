@@ -1,6 +1,6 @@
 import { FixedClock } from './clock';
-import { Simulator } from './engine';
-import { DemoState } from './model';
+import { Simulator, USUARIO_INACTIVO } from './engine';
+import { DemoState, Usuario } from './model';
 import { buildSeed } from './seed';
 import {
   aplicarAbonos,
@@ -9,10 +9,17 @@ import {
   CuentaVendedor,
   estadoExistencias,
   existenciasCamion,
+  faltaVendedor,
+  perfilesDetalle,
+  perfilesTexto,
+  prerrequisitosCargue,
+  puedeVender,
   quedanEnCamion,
   resumenVenta,
   subtotalSeleccion,
+  usuariosDeEmpresa,
   vendedoresDe,
+  vendedorListo,
 } from './selectors';
 
 /** Día de la demo de las pruebas: miércoles 18 de noviembre de 2026, 9:00 a. m. */
@@ -438,12 +445,132 @@ describe('Validaciones de los formularios', () => {
     expect(Date.parse(v2.fechaHora) - Date.parse(v1.fechaHora)).toBe(1000);
   });
 
-  it('sesión: un usuario con dos perfiles elige con cuál entra', () => {
+  it('R-15: sesión por usuario, sin elegir perfil; un usuario inactivo no entra (SUP-23)', () => {
     const { sim } = nuevo();
-    expect(ok(sim.iniciarSesion('usr-ramiro', 'conductor')).perfil.conductorId).toBe('CDT-A1');
-    expect(sim.state.sesion).toEqual({ usuarioId: 'usr-ramiro', perfil: 'conductor' });
-    expect(errorDe(sim.iniciarSesion('usr-doris', 'conductor'))).toBe('Doris Lucero no tiene el perfil conductor');
+    expect(ok(sim.iniciarSesion('usr-ramiro')).perfiles.map((p) => p.perfil)).toEqual(['vendedor', 'conductor']);
+    expect(sim.state.sesion).toEqual({ usuarioId: 'usr-ramiro' });
+    expect(errorDe(sim.iniciarSesion('usr-nadie'))).toBe('Ese usuario no existe en la demo');
+    ok(sim.cambiarEstadoUsuario('usr-wilson', false));
+    expect(errorDe(sim.iniciarSesion('usr-wilson'))).toBe(USUARIO_INACTIVO);
+    expect(sim.state.sesion).toEqual({ usuarioId: 'usr-ramiro' });
     sim.cerrarSesion();
     expect(sim.state.sesion.usuarioId).toBeNull();
+  });
+});
+
+describe('Usuarios de una empresa (R-14, F01 ampliado por D-T2)', () => {
+  const nombres = (s: DemoState, e: string) => usuariosDeEmpresa(s, e).map((u) => u.nombre);
+
+  it('E53: usuarios de la empresa en el orden empresa, vendedor, conductor; Ramiro una sola vez', () => {
+    const { sim } = nuevo();
+    expect(nombres(sim.state, 'EMP-A')).toEqual(['Paula Méndez', 'Doris Lucero', 'Olga Pineda', 'Ramiro Cárdenas', 'Edna Quiroga', 'Wilson Ortega', 'Yesid Navarro']);
+    expect(nombres(sim.state, 'EMP-B')).toEqual(['Jorge Salas', 'Hernán Rojas', 'Marta Gil', 'Nelson Pardo']);
+    expect(sim.state.usuarios.every((u) => u.activo)).toBe(true);
+    const ramiro = sim.state.usuarios.find((u) => u.id === 'usr-ramiro');
+    const doris = sim.state.usuarios.find((u) => u.id === 'usr-doris');
+    expect(perfilesDetalle(sim.state, ramiro as Usuario)).toEqual(['vendedor', 'conductor de GLK 101']);
+    expect(perfilesDetalle(sim.state, doris as Usuario)).toEqual(['vendedor de Transportes Lucero']);
+    expect(perfilesTexto(ramiro as Usuario)).toBe('vendedor y conductor');
+  });
+
+  it('E54: alta de un usuario empresa, activo, que entra con el menú de la empresa', () => {
+    const { sim } = nuevo();
+    const u = sim.crearUsuarioEmpresa('EMP-A', { nombre: 'Camilo Ruiz', usuario: ' Camilo.Condor ' });
+    expect(u.ok && u.message).toBe('Usuario camilo.condor creado en Gas Cóndor Demo');
+    const camilo = ok(u);
+    expect(camilo).toMatchObject({ nombre: 'Camilo Ruiz', usuario: 'camilo.condor', activo: true, perfiles: [{ perfil: 'empresa', empresaId: 'EMP-A' }] });
+    expect(nombres(sim.state, 'EMP-A')).toHaveLength(8);
+    expect(nombres(sim.state, 'EMP-A').slice(0, 2)).toEqual(['Camilo Ruiz', 'Paula Méndez']);
+    ok(sim.iniciarSesion(camilo.id));
+    expect(conciliacion(sim.state, 'EMP-A').totales).toMatchObject({ vendido: 1_330_000, pagado: 330_000, pendiente: 1_000_000 });
+  });
+
+  it('E55: datos inválidos al crear un usuario empresa', () => {
+    const { sim } = nuevo();
+    const antes = sim.state.usuarios.length;
+    const err = (nombre: string, usuario: string) => errorDe(sim.crearUsuarioEmpresa('EMP-A', { nombre, usuario }));
+    expect(err('', 'camilo.condor')).toBe('Escribe el nombre de la persona');
+    expect(err('Camilo Ruiz', '')).toBe('Escribe el usuario');
+    expect(err('Camilo Ruiz', 'camilo condor')).toBe('El usuario no puede tener espacios ni tildes');
+    expect(err('Camilo Ruiz', 'doris.lucero')).toBe('Ese usuario ya existe');
+    expect(errorDe(sim.crearUsuarioEmpresa('EMP-Z', { nombre: 'X', usuario: 'x' }))).toBe('Esa empresa no existe');
+    expect(sim.state.usuarios).toHaveLength(antes);
+  });
+
+  it('E56 (SUP-25): desactivar solo impide el ingreso; el conductor sigue en la flota y en el cargue', () => {
+    const { sim } = nuevo();
+    expect(ok(sim.cambiarEstadoUsuario('usr-wilson', false)).activo).toBe(false);
+    expect(sim.cambiarEstadoUsuario('usr-wilson', false).ok && 'Wilson Ortega desactivado').toBeTruthy();
+    expect(sim.state.conductores.find((c) => c.id === 'CDT-A2')?.vehiculoId).toBe('VEH-A2');
+    const carga = ok(sim.registrarCarga('EMP-A', 'usr-paula', { vendedorId: 'VEN-A2', vehiculoId: 'VEH-A2', conductorId: 'CDT-A2', cantidades: { P30: 1 } }));
+    expect(carga.conductorId).toBe('CDT-A2');
+    const r = sim.cambiarEstadoUsuario('usr-wilson', true);
+    expect(r.ok && r.message).toBe('Wilson Ortega activado');
+    expect(ok(sim.iniciarSesion('usr-wilson')).id).toBe('usr-wilson');
+  });
+
+  it('E57 (SUP-22): no se desactiva el último usuario empresa activo', () => {
+    const { sim } = nuevo();
+    expect(errorDe(sim.cambiarEstadoUsuario('usr-paula', false))).toBe('Gas Cóndor Demo debe tener al menos un usuario empresa activo');
+    expect(sim.state.usuarios.find((u) => u.id === 'usr-paula')?.activo).toBe(true);
+    ok(sim.crearUsuarioEmpresa('EMP-A', { nombre: 'Camilo Ruiz', usuario: 'camilo.condor' }));
+    expect(ok(sim.cambiarEstadoUsuario('usr-paula', false)).activo).toBe(false);
+    expect(errorDe(sim.cambiarEstadoUsuario('usr-camilo-condor', false))).toBe('Gas Cóndor Demo debe tener al menos un usuario empresa activo');
+    // Los vendedores y conductores sí se desactivan aunque sean los últimos de su perfil.
+    expect(ok(sim.cambiarEstadoUsuario('usr-marta', false)).activo).toBe(false);
+  });
+
+  it('SUP-12: los usuarios creados en vivo (empresa, vendedor, conductor) nacen activos', () => {
+    const { sim } = nuevo();
+    ok(sim.crearEmpresa({ nombre: 'Gas Páramo Demo', ciudad: 'Sogamoso', nombreUsuario: 'Lina Torres', usuario: 'lina.paramo' }));
+    const v = ok(sim.crearVendedor('EMP-A', { nombre: 'Gases La Loma', contacto: '', llaveTipo: 'alfanumerica', llave: '@laloma.demo' }));
+    const cam = ok(sim.crearVehiculo('EMP-A', { placa: 'glk105', vendedorId: v.id }));
+    ok(sim.crearConductor('EMP-A', { vendedorId: v.id, esElVendedor: false, nombre: 'Iván Mora', vehiculoId: cam.id }));
+    expect(sim.state.usuarios.slice(-3).map((u) => [u.usuario, u.activo])).toEqual([
+      ['lina.paramo', true],
+      ['gases.la.loma', true],
+      ['ivan.mora', true],
+    ]);
+    expect(nombres(sim.state, 'EMP-C')).toEqual(['Lina Torres']);
+  });
+});
+
+describe('Prerrequisitos guiados (R-16)', () => {
+  it('E59: una empresa nueva ve qué le falta para cargar; la llave avisa sin bloquear (SUP-26)', () => {
+    const { sim } = nuevo();
+    const e = ok(sim.crearEmpresa({ nombre: 'Gas Páramo Demo', ciudad: 'Sogamoso', nombreUsuario: 'Lina Torres', usuario: 'lina.paramo' }));
+    expect(prerrequisitosCargue(sim.state, e.id)).toEqual({ catalogo: false, flota: false, llave: false, puedeCargar: false });
+    ok(
+      sim.guardarCatalogo(e.id, [
+        { presentacionId: 'P100', peso: '45,4', valor: '170000', activa: true },
+        { presentacionId: 'P40', peso: '18,1', valor: '82500', activa: true },
+        { presentacionId: 'P30', peso: '13,6', valor: '65000', activa: true },
+      ])
+    );
+    const v = ok(sim.crearVendedor(e.id, { nombre: 'Gases Sogamoso', contacto: '', llaveTipo: 'alfanumerica', llave: '' }));
+    expect(prerrequisitosCargue(sim.state, e.id)).toMatchObject({ catalogo: true, flota: false, puedeCargar: false });
+    const cam = ok(sim.crearVehiculo(e.id, { placa: 'PRM 101', vendedorId: v.id }));
+    ok(sim.crearConductor(e.id, { vendedorId: v.id, esElVendedor: true, nombre: '', vehiculoId: cam.id }));
+    expect(prerrequisitosCargue(sim.state, e.id)).toEqual({ catalogo: true, flota: true, llave: false, puedeCargar: true });
+    expect(ok(sim.registrarCarga(e.id, 'usr-lina-paramo', { vendedorId: v.id, vehiculoId: cam.id, conductorId: 'CDT-C1', cantidades: { P100: 1 } })).id).toBe('CAR-C-001');
+  });
+
+  it('E60: un vendedor sin camión o sin conductor no está listo; los de la semilla sí', () => {
+    const { sim } = nuevo();
+    const v = ok(sim.crearVendedor('EMP-A', { nombre: 'Gases La Loma', contacto: '', llaveTipo: 'alfanumerica', llave: '' }));
+    expect(faltaVendedor(sim.state, v.id)).toEqual({ camion: true, conductor: true });
+    expect(['VEN-A1', 'VEN-A2', 'VEN-A3'].every((id) => vendedorListo(sim.state, id))).toBe(true);
+    const cam = ok(sim.crearVehiculo('EMP-A', { placa: 'GLK 105', vendedorId: v.id }));
+    expect(faltaVendedor(sim.state, v.id)).toEqual({ camion: false, conductor: true });
+    ok(sim.crearConductor('EMP-A', { vendedorId: v.id, esElVendedor: false, nombre: 'Iván Mora', vehiculoId: cam.id }));
+    expect(vendedorListo(sim.state, v.id)).toBe(true);
+    expect(prerrequisitosCargue(sim.state, 'EMP-A')).toEqual({ catalogo: true, flota: true, llave: true, puedeCargar: true });
+  });
+
+  it('E21: el camión sin cargas no puede vender (puedeVender)', () => {
+    const { sim } = nuevo();
+    expect(puedeVender(sim.state, 'CDT-A1')).toBe(false);
+    expect(puedeVender(sim.state, 'CDT-A2')).toBe(true);
+    expect(puedeVender(sim.state, null)).toBe(false);
   });
 });

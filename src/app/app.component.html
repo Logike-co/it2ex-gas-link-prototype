@@ -8,9 +8,23 @@
   </div>
 
   <header class="no-print bg-surface shadow-sm" data-testid="barra-superior">
-    <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2 md:px-4">
-      <a [routerLink]="home()" class="flex shrink-0 items-center" data-testid="logo">
-        <img src="gaslink-logo.png" alt="GasLink · Gestión comercial del gas" class="h-9 w-auto md:h-11" width="132" height="44" data-testid="logo-img" />
+    <div class="flex items-center gap-2 px-2 py-2 md:gap-3 md:px-4">
+      @if (usuario()) {
+        <button
+          type="button"
+          class="btn h-11 w-11 shrink-0 px-0 text-xl text-primary"
+          aria-label="Menú"
+          aria-controls="menu-lateral"
+          data-testid="btn-menu"
+          title="Menú"
+          [attr.aria-expanded]="menuOpen()"
+          (click)="toggleMenu()"
+        >
+          ☰
+        </button>
+      }
+      <a [routerLink]="usuario() ? store.inicio() : '/ingreso'" class="flex shrink-0 items-center" data-testid="logo">
+        <img src="gaslink-logo.png" alt="GasLink · Gestión comercial del gas" class="h-7 w-auto sm:h-9 md:h-11" width="132" height="44" data-testid="logo-img" />
       </a>
 
       <div class="min-w-0 flex-1 text-xs leading-tight text-muted" data-testid="sesion-encabezado">
@@ -18,78 +32,64 @@
           @if (empresa(); as e) {
             <div class="truncate font-bold text-navy" data-testid="empresa-sesion">{{ e.nombre }}</div>
           }
-          <div class="truncate">
+          <div class="truncate" [title]="u.nombre + ' · ' + perfiles()">
             <span class="font-semibold text-ink" data-testid="usuario-sesion">{{ u.nombre }}</span>
-            · <span data-testid="perfil-sesion">{{ perfil() }}</span>
+            · <span data-testid="perfiles-sesion">{{ perfiles() }}</span>
           </div>
-        } @else {
-          <span data-testid="usuario-sesion">Sin sesión</span>
         }
       </div>
 
-      <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-        <label class="sr-only" for="cambio-perfil">Cambio rápido de perfil</label>
-        <select
-          id="cambio-perfil"
-          class="input w-full min-w-0 text-xs sm:w-56"
-          data-testid="cambio-perfil"
-          title="Cambio rápido de perfil"
-          [value]="seleccion()"
-          (change)="cambiarPerfil($event)"
-        >
-          <option value="" [selected]="seleccion() === ''">Cambiar de perfil…</option>
-          @for (g of opciones(); track g.grupo) {
-            <optgroup [label]="g.grupo">
-              @for (o of g.opciones; track o.value) {
-                <option [value]="o.value" [selected]="o.value === seleccion()">{{ o.label }}</option>
-              }
-            </optgroup>
-          }
-        </select>
-        <button
-          type="button"
-          class="btn"
-          data-testid="btn-guia"
-          title="Guía del presentador (Ctrl+Shift+D)"
-          [class.btn-primary]="demo.hudOpen()"
-          [attr.aria-pressed]="demo.hudOpen()"
-          (click)="demo.toggleHud()"
-        >
-          Guía
-        </button>
-        <button type="button" class="btn btn-accent" data-testid="btn-reiniciar" title="Reiniciar demo (Ctrl+Shift+R)" (click)="reiniciar()">
-          Reiniciar demo
-        </button>
-        @if (usuario()) {
-          <button type="button" class="btn" data-testid="btn-salir" (click)="salir()">Salir</button>
-        }
-      </div>
+      <button
+        type="button"
+        class="btn shrink-0"
+        data-testid="btn-guia"
+        aria-label="Guía del presentador"
+        title="Guía del presentador (Ctrl+Shift+D)"
+        [class.btn-primary]="demo.hudOpen()"
+        [attr.aria-pressed]="demo.hudOpen()"
+        (click)="demo.toggleHud()"
+      >
+        Guía
+      </button>
+      @if (usuario()) {
+        <button type="button" class="btn shrink-0" data-testid="btn-salir" aria-label="Salir" (click)="salir()">Salir</button>
+      }
     </div>
-
-    @if (menu().length) {
-      <nav class="border-t border-line bg-surface px-2 md:px-4" aria-label="Menú del perfil" data-testid="menu">
-        <ul class="flex flex-wrap gap-1 py-1">
-          @for (m of menu(); track m.view) {
-            <li>
-              <a
-                [routerLink]="'/' + m.path"
-                routerLinkActive
-                #rla="routerLinkActive"
-                ariaCurrentWhenActive="page"
-                class="flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold"
-                [class]="rla.isActive ? 'bg-primary text-white' : 'text-primary hover:bg-primary-soft'"
-                [attr.data-testid]="'nav-' + m.view"
-                >{{ m.label }}</a
-              >
-            </li>
-          }
-        </ul>
-      </nav>
-    }
     <div class="brand-rule h-[3px]" aria-hidden="true"></div>
   </header>
 
   <div class="flex flex-1 items-start">
+    @if (usuario() && menuOpen()) {
+      <div class="no-print fixed inset-0 z-40 bg-navy/40 md:hidden" aria-hidden="true" data-testid="menu-fondo" (click)="menuOpen.set(false)"></div>
+      <nav
+        id="menu-lateral"
+        class="no-print fixed inset-y-0 left-0 z-[45] w-72 max-w-[85vw] overflow-y-auto border-r border-line bg-surface px-2 pt-9 pb-4 shadow-xl md:sticky md:top-8 md:z-auto md:max-h-[calc(100vh-2rem)] md:w-60 md:shrink-0 md:self-start md:pt-2 md:shadow-none"
+        aria-label="Menú"
+        data-testid="menu"
+      >
+        @for (sec of menu(); track sec.seccion) {
+          <section class="mb-2" data-testid="menu-seccion">
+            <h2 class="px-2 pt-2 pb-1 text-[11px] font-extrabold tracking-wide text-muted uppercase" data-testid="menu-seccion-titulo">{{ sec.seccion }}</h2>
+            <ul class="flex flex-col gap-0.5">
+              @for (o of sec.opciones; track o.view) {
+                <li>
+                  <a
+                    [routerLink]="path(o.view)"
+                    class="flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold"
+                    [class]="opcionActiva() === o.view ? 'bg-primary text-white' : 'text-primary hover:bg-primary-soft'"
+                    [attr.aria-current]="opcionActiva() === o.view ? 'page' : null"
+                    [attr.data-testid]="'nav-' + o.view"
+                    (click)="cerrarMenuEnCelular()"
+                    >{{ o.label }}</a
+                  >
+                </li>
+              }
+            </ul>
+          </section>
+        }
+      </nav>
+    }
+
     <main class="min-w-0 flex-1 p-3 md:p-5">
       @if (store.flash(); as f) {
         <div
