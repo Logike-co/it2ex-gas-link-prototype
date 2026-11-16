@@ -1,0 +1,146 @@
+@import "tailwindcss";
+
+/*
+ * Identidad visual de GasLink, tomada del logo (public/gaslink-logo.png): azul oscuro de «Gas»,
+ * azul medio de «Link» y del cilindro, naranja de la llama, la órbita y el punto de la «i», y
+ * el gris del lema. Mientras no haya un manual de marca, se cambian SOLO estos tokens y el
+ * logo; las vistas no se tocan.
+ */
+@font-face {
+  font-family: "Nunito";
+  font-style: normal;
+  font-weight: 200 1000;
+  font-display: swap;
+  src: url("./fonts/nunito-latin-wght-normal.woff2") format("woff2");
+}
+
+:root {
+  --gl-navy: #0b2a50; /* «Gas» */
+  --gl-blue: #0a6cc0; /* «Link» y cilindro, oscurecido un punto para texto AA sobre blanco */
+  --gl-blue-bright: #0a7fd6; /* cilindro: solo decorativo */
+  --gl-blue-soft: #e4f0fb;
+  --gl-orange: #f26b0a; /* punto de la «i»: solo fondos y adornos, nunca texto sobre blanco */
+  --gl-orange-2: #f7941d; /* órbita */
+  --gl-orange-soft: #fff1e6;
+  --gl-gray: #5f6368; /* lema */
+  --gl-surface: #ffffff;
+  --gl-surface-alt: #f4f7fb;
+  --gl-border: #dde4ee;
+  --gl-text: #172b44;
+  --gl-success: #15803d;
+  --gl-success-soft: #dcfce7;
+  --gl-warning: #a14a00;
+  --gl-warning-soft: #fff4e0;
+  --gl-error: #b91c1c;
+  --gl-error-soft: #fee2e2;
+  --gl-font: "Nunito", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+@theme inline {
+  --color-navy: var(--gl-navy);
+  --color-primary: var(--gl-blue);
+  --color-primary-bright: var(--gl-blue-bright);
+  --color-primary-hover: var(--gl-navy);
+  --color-primary-soft: var(--gl-blue-soft);
+  --color-accent: var(--gl-orange);
+  --color-accent-2: var(--gl-orange-2);
+  --color-accent-soft: var(--gl-orange-soft);
+  --color-surface: var(--gl-surface);
+  --color-surface-alt: var(--gl-surface-alt);
+  --color-line: var(--gl-border);
+  --color-ink: var(--gl-text);
+  --color-muted: var(--gl-gray);
+  --color-success: var(--gl-success);
+  --color-success-soft: var(--gl-success-soft);
+  --color-warning: var(--gl-warning);
+  --color-warning-soft: var(--gl-warning-soft);
+  --color-error: var(--gl-error);
+  --color-error-soft: var(--gl-error-soft);
+  --font-sans: var(--gl-font);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--gl-font);
+  background: var(--gl-surface-alt);
+  color: var(--gl-text);
+}
+
+@layer components {
+  .card {
+    @apply min-w-0 rounded-xl border border-line bg-surface p-4 shadow-sm;
+  }
+  .card-title {
+    @apply mb-3 flex flex-wrap items-center gap-2 text-base font-bold text-navy;
+  }
+  .btn {
+    @apply inline-flex min-h-11 shrink-0 items-center justify-center gap-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-center text-sm font-semibold text-ink hover:bg-surface-alt disabled:cursor-not-allowed disabled:opacity-50 md:min-h-9;
+  }
+  .btn-primary {
+    @apply border-primary bg-primary text-white hover:border-primary-hover hover:bg-primary-hover;
+  }
+  .btn-accent {
+    @apply border-accent bg-accent text-navy hover:bg-accent-2;
+  }
+  .btn-danger {
+    @apply border-error bg-error text-white hover:opacity-90;
+  }
+  /* Botones y campos de las pantallas del conductor: al menos 44 px de alto en cualquier ancho (E47). */
+  .btn-lg {
+    @apply min-h-12 px-4 text-base md:min-h-12;
+  }
+  .input {
+    @apply w-full min-h-11 rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink focus:outline-2 focus:outline-primary md:min-h-9;
+  }
+  .input-lg {
+    @apply min-h-12 text-base md:min-h-12;
+  }
+  .label {
+    @apply mb-1 block text-xs font-semibold text-muted;
+  }
+  .table {
+    @apply w-full border-collapse text-sm;
+  }
+  .table th {
+    @apply border-b border-line bg-surface-alt px-2 py-1.5 text-left text-xs font-semibold text-muted;
+  }
+  .table td {
+    @apply border-b border-line px-2 py-1.5 align-top;
+  }
+  .table th.num {
+    @apply text-right;
+  }
+  .num {
+    @apply text-right whitespace-nowrap tabular-nums;
+  }
+  .page-title {
+    @apply text-xl font-extrabold text-navy;
+  }
+  .error-text {
+    @apply mt-2 rounded-lg border border-error bg-error-soft px-3 py-2 text-sm text-error;
+  }
+  .warning-text {
+    @apply mt-2 rounded-lg border border-warning bg-warning-soft px-3 py-2 text-sm text-warning;
+  }
+  .brand-rule {
+    background: linear-gradient(90deg, var(--gl-navy) 0%, var(--gl-blue-bright) 60%, var(--gl-orange-2) 85%, var(--gl-orange) 100%);
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  /* El informe imprimible lleva su propia leyenda arriba y abajo: no se repite la del shell. */
+  body:has(.informe-imprimible) .leyenda-shell {
+    display: none !important;
+  }
+  body {
+    background: #ffffff;
+  }
+}
