@@ -24,10 +24,12 @@ import { CopPipe } from '../../shared/pipes';
       <app-param-ajeno [texto]="'Ese vendedor no existe en ' + (store.empresa()?.nombre ?? '')" enlace="Pagos de vendedores" link="/empresa/pagos" />
     } @else {
       <form class="card max-w-lg" (submit)="$event.preventDefault(); registrar()" data-testid="form-pago">
-        <label class="label" for="pago-vendedor">Vendedor *</label>
         @if (fijo(); as v) {
-          <p class="input flex items-center bg-surface-alt font-semibold" id="pago-vendedor" data-testid="pago-vendedor-fijo">{{ v.nombre }}</p>
+          <!-- Valor fijo (no es un control): la etiqueta es texto, no un <label for>. -->
+          <p class="label">Vendedor</p>
+          <p class="input flex items-center bg-surface-alt font-semibold" data-testid="pago-vendedor-fijo">{{ v.nombre }}</p>
         } @else {
+          <label class="label" for="pago-vendedor">Vendedor *</label>
           <select id="pago-vendedor" class="input" data-testid="pago-vendedor" [value]="elegido()" (change)="elegir(val($event))">
             <option value="">Elige el vendedor…</option>
             @for (v of vendedores(); track v.id) {
@@ -143,7 +145,7 @@ export class RegistrarPagoComponent {
       })
     );
     if (r.ok) {
-      this.router.navigateByUrl(`/empresa/conciliacion/${r.value.vendedorId}`);
+      this.router.navigateByUrl(`/empresa/conciliacion/${r.value.vendedorId}`, this.store.conAviso());
     } else {
       this.error.set(r.error);
     }

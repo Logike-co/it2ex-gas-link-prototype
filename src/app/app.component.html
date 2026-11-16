@@ -11,6 +11,7 @@
     <div class="flex items-center gap-2 px-2 py-2 md:gap-3 md:px-4">
       @if (usuario()) {
         <button
+          #btnMenu
           type="button"
           class="btn h-11 w-11 shrink-0 px-0 text-xl text-primary"
           aria-label="Menú"
@@ -60,12 +61,15 @@
 
   <div class="flex flex-1 items-start">
     @if (usuario() && menuOpen()) {
-      <div class="no-print fixed inset-0 z-40 bg-navy/40 md:hidden" aria-hidden="true" data-testid="menu-fondo" (click)="menuOpen.set(false)"></div>
+      <div class="no-print fixed inset-0 z-40 bg-navy/40 md:hidden" aria-hidden="true" data-testid="menu-fondo" (click)="cerrarOverlay()"></div>
       <nav
+        #menuNav
         id="menu-lateral"
         class="no-print fixed inset-y-0 left-0 z-[45] w-72 max-w-[85vw] overflow-y-auto border-r border-line bg-surface px-2 pt-9 pb-4 shadow-xl md:sticky md:top-8 md:z-auto md:max-h-[calc(100vh-2rem)] md:w-60 md:shrink-0 md:self-start md:pt-2 md:shadow-none"
         aria-label="Menú"
         data-testid="menu"
+        [attr.role]="angosta() ? 'dialog' : null"
+        [attr.aria-modal]="angosta() ? 'true' : null"
       >
         @for (sec of menu(); track sec.seccion) {
           <section class="mb-2" data-testid="menu-seccion">

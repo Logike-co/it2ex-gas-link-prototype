@@ -107,6 +107,35 @@ describe('DemoStore (persistencia y reinicio, §8 y ALC-05)', () => {
     expect(createStore().state().empresas).toHaveLength(2);
   });
 
+  it('§8.6: un estado del esquema vigente al que le falta una colección se descarta (no rompe Cargues)', () => {
+    const sinCargas: Record<string, unknown> = { ...createStore().state() };
+    delete sinCargas['cargas'];
+    localStorage.setItem(STATE_KEY, JSON.stringify({ ...sinCargas, sesion: { usuarioId: 'usr-paula' } }));
+    const store = createStore();
+    expect(store.state().cargas).toHaveLength(5);
+    expect(store.usuario()).toBeNull();
+    for (const roto of [{ ventas: null }, { cobros: {} }, { pagos: 'x' }, { presentaciones: undefined }]) {
+      localStorage.setItem(STATE_KEY, JSON.stringify({ ...createStore().state(), ...roto }));
+      const s = createStore().state();
+      expect([s.ventas.length, s.cobros.length, s.pagos.length, s.presentaciones.length]).toEqual([4, 7, 1, 6]);
+    }
+  });
+
+  it('SUP-28: el aviso solo sobrevive a la navegación que lo lleva', () => {
+    const store = createStore();
+    cargaRamiro(store);
+    const aviso = store.flash();
+    expect(store.conAviso()).toEqual({ info: { aviso } });
+    store.descartarAvisoAjeno(store.conAviso().info);
+    expect(store.flash()).toBe(aviso);
+    store.descartarAvisoAjeno(undefined);
+    expect(store.flash()).toBeNull();
+    expect(store.conAviso()).toEqual({});
+    store.flash.set({ kind: 'ok', text: 'otro' });
+    store.descartarAvisoAjeno({ aviso });
+    expect(store.flash()).toBeNull();
+  });
+
   it('funciona sin almacenamiento del navegador', () => {
     const spy = jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('bloqueado');

@@ -2,7 +2,7 @@ import { Component, computed, inject, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ESTADO_VENDEDOR_LABEL, filaConciliacion, referenciasDe, vendedorById } from '../../core/simulation/selectors';
 import { DemoStore } from '../../core/state/demo.store';
-import { BadgeComponent, IlustrativoComponent } from '../../shared/badges.component';
+import { AYUDA_EN_PODER, BadgeComponent, IlustrativoComponent } from '../../shared/badges.component';
 import { MigasComponent } from '../../shared/migas.component';
 import { ParamAjenoComponent } from '../../shared/param-ajeno.component';
 import { CopPipe, FechaPipe } from '../../shared/pipes';
@@ -43,7 +43,7 @@ import { TONO_VENDEDOR } from '../cuenta/cuenta-shared';
         </div>
         <div class="card">
           <p class="text-xs font-semibold text-muted uppercase">
-            Pagado <app-ilustrativo detalle="Lo cobrado a la llave de la empresa abona desde que se registra; «Llegó» solo confirma (SUP-07)." />
+            Pagado <app-ilustrativo detalle="Lo cobrado a la llave de la empresa abona desde que se registra; «Llegó» solo confirma." />
           </p>
           <p class="text-2xl font-extrabold text-navy" [attr.data-testid]="'pagado-' + f.vendedor.id">{{ f.pagado | cop }}</p>
           <p class="text-xs text-muted">
@@ -59,7 +59,7 @@ import { TONO_VENDEDOR } from '../cuenta/cuenta-shared';
           }
         </div>
         <div class="card">
-          <p class="text-xs font-semibold text-muted uppercase">En poder <app-ilustrativo detalle="SUP-10" /></p>
+          <p class="text-xs font-semibold text-muted uppercase">En poder <app-ilustrativo [detalle]="ayudaEnPoder" /></p>
           <p class="text-2xl font-extrabold text-navy" [attr.data-testid]="'enpoder-' + f.vendedor.id">{{ f.enPoder | cop }}</p>
         </div>
       </section>
@@ -116,6 +116,7 @@ import { TONO_VENDEDOR } from '../cuenta/cuenta-shared';
   `,
 })
 export class ConciliacionVendedorComponent {
+  readonly ayudaEnPoder = AYUDA_EN_PODER;
   readonly store = inject(DemoStore);
   /** `:vendedorId` (validado contra la empresa de la sesión, §1.5). */
   readonly vendedorId = input<string>();

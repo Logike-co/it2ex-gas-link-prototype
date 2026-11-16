@@ -10,7 +10,7 @@ import {
   vendedorById,
 } from '../../core/simulation/selectors';
 import { DemoStore } from '../../core/state/demo.store';
-import { BadgeComponent, IlustrativoComponent } from '../../shared/badges.component';
+import { AYUDA_EN_PODER, BadgeComponent, IlustrativoComponent } from '../../shared/badges.component';
 import { Miga, MigasComponent } from '../../shared/migas.component';
 import { ParamAjenoComponent } from '../../shared/param-ajeno.component';
 import { CopPipe, FechaPipe, KgPipe } from '../../shared/pipes';
@@ -61,7 +61,7 @@ import { MovimientosTablaComponent, TONO_PAGO, TONO_VENDEDOR } from './cuenta-sh
           </div>
           <div class="card border-2" [class.border-accent]="c.saldoGeneral > 0">
             @if (c.saldoAFavor > 0) {
-              <p class="text-xs font-semibold text-muted uppercase">Saldo a favor <app-ilustrativo detalle="Lo cobrado de más se aplica a la siguiente carga (SUP-06)." /></p>
+              <p class="text-xs font-semibold text-muted uppercase">Saldo a favor <app-ilustrativo detalle="Lo cobrado de más se aplica a la siguiente carga." /></p>
               <p class="text-2xl font-extrabold text-primary" data-testid="resumen-a-favor">Saldo a favor: {{ c.saldoAFavor | cop }}</p>
             } @else {
               <p class="text-xs font-semibold text-muted uppercase">Saldo</p>
@@ -70,7 +70,7 @@ import { MovimientosTablaComponent, TONO_PAGO, TONO_VENDEDOR } from './cuenta-sh
           </div>
           <div class="card">
             <p class="text-xs font-semibold text-muted uppercase">
-              Dinero en poder <app-ilustrativo detalle="Suma de efectivo y llave del vendedor; no se descuenta con sus pagos (SUP-10)." />
+              Dinero en poder <app-ilustrativo [detalle]="ayudaEnPoder" />
             </p>
             <p class="text-2xl font-extrabold text-navy">{{ c.enPoder.total | cop }}</p>
             <p class="text-xs" data-testid="resumen-en-poder">
@@ -134,7 +134,7 @@ import { MovimientosTablaComponent, TONO_PAGO, TONO_VENDEDOR } from './cuenta-sh
                           <span class="font-semibold">
                             {{ a.regla === 'origen' ? 'origen' : 'a la más antigua' }}
                             @if (a.regla === 'origen') {
-                              <app-ilustrativo detalle="Si la venta salió de varias cargas, el cobro se reparte en proporción al valor de los cilindros (SUP-05)." />
+                              <app-ilustrativo detalle="Si la venta salió de varias cargas, el cobro se reparte en proporción al valor de los cilindros." />
                             }
                           </span>
                           <span class="num">{{ a.monto | cop }}</span>
@@ -166,7 +166,7 @@ import { MovimientosTablaComponent, TONO_PAGO, TONO_VENDEDOR } from './cuenta-sh
             </section>
           }
           <section class="card overflow-x-auto">
-            <h2 class="card-title">{{ esEmpresa() ? 'Dinero en poder del vendedor' : 'Dinero en tu poder' }} <app-ilustrativo detalle="SUP-10" /></h2>
+            <h2 class="card-title">{{ esEmpresa() ? 'Dinero en poder del vendedor' : 'Dinero en tu poder' }} <app-ilustrativo [detalle]="ayudaEnPoder" /></h2>
             <p class="mb-2 text-xs text-muted">Cobros en efectivo y a la llave del vendedor: no abonan a la cuenta.</p>
             <table class="table" data-testid="tabla-en-poder">
               <thead>
@@ -194,6 +194,7 @@ import { MovimientosTablaComponent, TONO_PAGO, TONO_VENDEDOR } from './cuenta-sh
   `,
 })
 export class CuentaComponent {
+  readonly ayudaEnPoder = AYUDA_EN_PODER;
   readonly store = inject(DemoStore);
   /** `:vendedorId` (solo la empresa, V20; se valida contra su empresa, E09). */
   readonly vendedorId = input<string>();

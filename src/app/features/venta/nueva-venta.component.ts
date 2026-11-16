@@ -114,7 +114,7 @@ export class NuevaVentaComponent {
     if (r.ok) {
       this.cantidades.set({});
       this.valor.set('');
-      this.router.navigateByUrl(`/conductor/ventas/${r.value.id}`);
+      this.router.navigateByUrl(`/conductor/ventas/${r.value.id}`, this.store.conAviso());
     }
   }
 }

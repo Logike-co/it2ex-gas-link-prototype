@@ -11,7 +11,6 @@ export default tseslint.config(
       "**/dist",
       "**/coverage",
       "src/jestGlobalMocks.ts",
-      "src/environments",
     ],
   },
   {

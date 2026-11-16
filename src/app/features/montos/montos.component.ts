@@ -2,7 +2,7 @@ import { Component, computed, effect, inject, input, signal, untracked } from '@
 import { Router, RouterLink } from '@angular/router';
 import { formatMoney, parsePesos } from '../../core/simulation/format';
 import { MedioCobro, MEDIOS } from '../../core/simulation/model';
-import { cobrosDeVenta, MEDIO_LABEL, resumenVenta, textoVenta, ventaById } from '../../core/simulation/selectors';
+import { cobrosDeVenta, empresaById, MEDIO_LABEL, resumenVenta, textoVenta, vendedorById, ventaById } from '../../core/simulation/selectors';
 import { DemoStore } from '../../core/state/demo.store';
 import { BadgeComponent } from '../../shared/badges.component';
 import { MigasComponent } from '../../shared/migas.component';
@@ -63,13 +63,18 @@ interface Linea {
                   <button
                     type="button"
                     role="radio"
-                    class="btn btn-lg px-1 text-xs leading-tight"
+                    class="btn btn-lg flex-col px-1 text-xs leading-tight"
                     [class.btn-primary]="l.medio === m"
                     [attr.aria-checked]="l.medio === m"
+                    [disabled]="!!sinLlave()[m]"
+                    [title]="sinLlave()[m] ?? ''"
                     [attr.data-testid]="'medio-' + i + '-' + m"
                     (click)="cambiar(i, { medio: m })"
                   >
                     {{ medioLabel[m] }}
+                    @if (sinLlave()[m]; as ayuda) {
+                      <span class="text-[11px] font-normal" [attr.data-testid]="'ayuda-medio-' + i + '-' + m">{{ ayuda }}</span>
+                    }
                   </button>
                 }
               </div>
@@ -89,7 +94,9 @@ interface Linea {
           <button type="button" class="btn btn-lg mb-3 w-full" data-testid="agregar-linea" (click)="agregar()">Agregar línea</button>
 
           @if (exceso() > 0) {
-            <p class="warning-text" data-testid="aviso-exceso">Registraste {{ excesoTexto() }} más que el valor de la venta</p>
+            <p class="warning-text" data-testid="aviso-exceso">
+              Registraste {{ excesoTexto() }} {{ resumen()?.cobrado ? 'más de lo que falta por cobrar' : 'más que el valor de la venta' }}
+            </p>
           }
           @if (error(); as e) {
             <p class="error-text" data-testid="error-montos" role="alert">{{ e }}</p>
@@ -133,11 +140,28 @@ export class MontosComponent {
   readonly estadoTexto = computed(() => (this.resumen() ? textoVenta(this.resumen()!) : ''));
   readonly registrados = computed(() => (this.resumen() ? cobrosDeVenta(this.store.state(), this.resumen()!.venta.id) : []));
 
+  /**
+   * Medios a una llave que no existe: se deshabilitan con su explicación, como en el cobro con
+   * QR (V34). El motor también lo rechaza; esto evita llegar a ese error.
+   */
+  readonly sinLlave = computed<Partial<Record<MedioCobro, string>>>(() => {
+    const s = this.store.state();
+    const v = this.resumen()?.venta;
+    if (!v) return {};
+    return {
+      ...(empresaById(s, v.empresaId)?.llave?.valor ? {} : { llave_empresa: 'La empresa no tiene llave de cobro' }),
+      ...(vendedorById(s, v.vendedorId)?.llave?.valor ? {} : { llave_vendedor: 'El vendedor no tiene llave de cobro' }),
+    };
+  });
+
   readonly lineas = signal<Linea[]>([]);
   readonly error = signal<string | null>(null);
   readonly confirmarSinReferencia = signal(false);
 
-  /** E28: lo registrado de más frente a lo que falta por cobrar (aviso, no bloquea). */
+  /**
+   * E28: lo registrado de más frente a lo que falta por cobrar (aviso, no bloquea). Sin cobros
+   * previos, lo que falta es el valor de la venta y el aviso lo dice así.
+   */
   readonly exceso = computed(() => {
     const total = this.lineas().reduce((a, l) => {
       const p = parsePesos(l.monto);
@@ -219,7 +243,7 @@ export class MontosComponent {
     this.confirmarSinReferencia.set(false);
     this.error.set(res.ok ? null : res.error);
     if (res.ok) {
-      this.router.navigateByUrl(`/conductor/ventas/${r.venta.id}`);
+      this.router.navigateByUrl(`/conductor/ventas/${r.venta.id}`, this.store.conAviso());
     }
   }
 }

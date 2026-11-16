@@ -97,7 +97,7 @@ import { TONO_PAGO } from '../cuenta/cuenta-shared';
                 <td class="font-semibold">
                   {{ a.regla === 'origen' ? 'origen' : 'a la más antigua' }}
                   @if (a.regla === 'origen') {
-                    <app-ilustrativo detalle="Si la venta salió de varias cargas, el cobro se reparte en proporción al valor de los cilindros (SUP-05)." />
+                    <app-ilustrativo detalle="Si la venta salió de varias cargas, el cobro se reparte en proporción al valor de los cilindros." />
                   }
                 </td>
                 <td class="num">{{ a.monto | cop }}</td>

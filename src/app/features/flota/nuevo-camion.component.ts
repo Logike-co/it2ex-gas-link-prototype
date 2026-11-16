@@ -28,10 +28,12 @@ import { ParamAjenoComponent } from '../../shared/param-ajeno.component';
       <form class="card max-w-lg" (ngSubmit)="crearCamion()" data-testid="form-camion">
         <label class="label" for="cam-placa">Placa (AAA 999) *</label>
         <input id="cam-placa" class="input mb-2" name="placa" autocapitalize="characters" data-testid="camion-placa" [(ngModel)]="cPlaca" />
-        <label class="label" for="cam-dueno">Dueño *</label>
         @if (fijo(); as v) {
-          <p class="input flex items-center bg-surface-alt font-semibold" id="cam-dueno" data-testid="camion-dueno-fijo">{{ v.nombre }}</p>
+          <!-- Valor fijo (no es un control): la etiqueta es texto, no un <label for>. -->
+          <p class="label">Dueño</p>
+          <p class="input flex items-center bg-surface-alt font-semibold" data-testid="camion-dueno-fijo">{{ v.nombre }}</p>
         } @else {
+          <label class="label" for="cam-dueno">Dueño *</label>
           <select id="cam-dueno" class="input" name="dueno" data-testid="camion-dueno" [(ngModel)]="cDueno">
             <option value="">Elige el vendedor…</option>
             @for (v of vendedores(); track v.id) {
@@ -85,7 +87,7 @@ export class NuevoCamionComponent {
     const r = this.store.exec((sim) => sim.crearVehiculo(empresaId, { placa: this.cPlaca, vendedorId: this.fijo()?.id ?? this.cDueno }));
     this.errorCamion.set(r.ok ? null : r.error);
     if (r.ok) {
-      this.router.navigateByUrl(this.volver());
+      this.router.navigateByUrl(this.volver(), this.store.conAviso());
     }
   }
 }

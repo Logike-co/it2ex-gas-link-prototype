@@ -1,4 +1,5 @@
 import { computed, inject, Injectable, InjectionToken, signal } from '@angular/core';
+import { NavigationBehaviorOptions } from '@angular/router';
 import { AccessAction, can, canView, inicioDe, menuDe, MenuSeccion, ViewId } from '../access/access';
 import { Clock, SystemClock } from '../simulation/clock';
 import { Simulator } from '../simulation/engine';
@@ -23,6 +24,38 @@ export interface Flash {
 }
 
 export const RESET_MESSAGE = 'Demo reiniciada a los datos de ejemplo';
+
+/** Colecciones de `DemoState`: un estado guardado sin alguna de ellas como arreglo se descarta. */
+const COLECCIONES = [
+  'empresas',
+  'presentaciones',
+  'vendedores',
+  'vehiculos',
+  'conductores',
+  'usuarios',
+  'cargas',
+  'ventas',
+  'cobros',
+  'pagos',
+] as const satisfies readonly (keyof DemoState)[];
+
+/** Estado guardado con el esquema vigente y todas sus colecciones (§8.6). */
+const esEstadoValido = (s: unknown): s is DemoState => {
+  if (typeof s !== 'object' || s === null) return false;
+  const o = s as Record<string, unknown>;
+  return (
+    o['schemaVersion'] === SCHEMA_VERSION &&
+    COLECCIONES.every((k) => Array.isArray(o[k])) &&
+    typeof o['contadores'] === 'object' &&
+    o['contadores'] !== null &&
+    typeof o['empresasCreadas'] === 'number'
+  );
+};
+
+/** Aviso que lleva una navegación en `NavigationBehaviorOptions.info` (ver `DemoStore.conAviso`). */
+interface InfoConAviso {
+  aviso?: Flash;
+}
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
@@ -93,6 +126,27 @@ export class DemoStore {
     return result;
   }
 
+  /**
+   * Opciones para navegar llevando el aviso actual a la pantalla de destino (SUP-28: el aviso
+   * de un formulario hijo se ve en su padre). El aviso viaja con esa navegación y no depende
+   * de cuánto tarde en cargar la pantalla.
+   */
+  conAviso(): NavigationBehaviorOptions {
+    const aviso = this.flash();
+    return aviso ? { info: { aviso } satisfies InfoConAviso } : {};
+  }
+
+  /**
+   * Al terminar una navegación, el aviso solo sigue si esa navegación lo trae (`conAviso`);
+   * en cualquier otra (menú, migas, botón Atrás) se descarta.
+   */
+  descartarAvisoAjeno(info: unknown): void {
+    const actual = this.flash();
+    if (actual !== null && (info as InfoConAviso | undefined)?.aviso !== actual) {
+      this.flash.set(null);
+    }
+  }
+
   iniciarSesion(usuarioId: string): Result<Usuario> {
     return this.run((sim) => sim.iniciarSesion(usuarioId));
   }
@@ -127,15 +181,16 @@ export class DemoStore {
   }
 
   /**
-   * Estado guardado o semilla. Un estado de otra versión del esquema se descarta (§8.6); si la
-   * sesión guardada es de un usuario que ya no existe o está inactivo, se cierra (R-15).
+   * Estado guardado o semilla. Un estado de otra versión del esquema, o al que le falte alguna
+   * colección, se descarta (§8.6); si la sesión guardada es de un usuario que ya no existe o
+   * está inactivo, se cierra (R-15).
    */
   private loadOrSeed(): DemoState {
     try {
       const raw = localStorage.getItem(STATE_KEY);
       if (raw) {
-        const parsed = JSON.parse(raw) as DemoState;
-        if (parsed.schemaVersion === SCHEMA_VERSION && Array.isArray(parsed.empresas) && Array.isArray(parsed.usuarios)) {
+        const parsed: unknown = JSON.parse(raw);
+        if (esEstadoValido(parsed)) {
           const id = parsed.sesion?.usuarioId ?? null;
           if (!parsed.usuarios.some((u) => u.id === id && u.activo)) {
             parsed.sesion = { usuarioId: null };

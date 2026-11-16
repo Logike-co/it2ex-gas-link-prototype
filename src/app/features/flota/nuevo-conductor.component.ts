@@ -27,10 +27,12 @@ import { ParamAjenoComponent } from '../../shared/param-ajeno.component';
       </div>
     } @else {
       <form class="card max-w-lg" (ngSubmit)="crearConductor()" data-testid="form-conductor">
-        <label class="label" for="cdt-vendedor">Vendedor para el que trabaja *</label>
         @if (fijo(); as v) {
-          <p class="input flex items-center bg-surface-alt font-semibold" id="cdt-vendedor" data-testid="conductor-vendedor-fijo">{{ v.nombre }}</p>
+          <!-- Valor fijo (no es un control): la etiqueta es texto, no un <label for>. -->
+          <p class="label">Vendedor para el que trabaja</p>
+          <p class="input flex items-center bg-surface-alt font-semibold" data-testid="conductor-vendedor-fijo">{{ v.nombre }}</p>
         } @else {
+          <label class="label" for="cdt-vendedor">Vendedor para el que trabaja *</label>
           <select id="cdt-vendedor" class="input mb-2" name="vendedor" data-testid="conductor-vendedor" [ngModel]="kVendedor()" (ngModelChange)="elegirVendedor($event)">
             <option value="">Elige el vendedor…</option>
             @for (v of vendedores(); track v.id) {
@@ -119,7 +121,7 @@ export class NuevoConductorComponent {
     );
     this.errorConductor.set(r.ok ? null : r.error);
     if (r.ok) {
-      this.router.navigateByUrl(this.volver());
+      this.router.navigateByUrl(this.volver(), this.store.conAviso());
     }
   }
 }

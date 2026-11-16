@@ -1,5 +1,6 @@
 # Publica el demo en GitHub Pages en cada push a main (o a mano desde la pestaña Actions).
-# Antes de publicar verifica lint y pruebas unitarias; si fallan, el sitio no se actualiza.
+# Antes de publicar verifica lint, pruebas unitarias y de extremo a extremo; si fallan, el sitio
+# no se actualiza. Las acciones van fijadas a su commit (el tag queda como comentario).
 name: Publicar en GitHub Pages
 
 on:
@@ -9,20 +10,19 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
+# Una publicación en curso no se cancela: la siguiente espera su turno.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
           cache: npm
@@ -34,6 +34,12 @@ jobs:
           npm run lint
           npx jest --ci
 
+      # Con CI=true, Playwright levanta su propio `ng serve` en el puerto 4200 (no reutiliza uno).
+      - name: Pruebas de extremo a extremo
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test
+
       - name: Build bajo la ruta del repositorio
         run: npx ng build --base-href "/${{ github.event.repository.name }}/"
 
@@ -42,16 +48,19 @@ jobs:
       - name: Respaldo para enlaces directos
         run: cp dist/gas-link-prototype/browser/index.html dist/gas-link-prototype/browser/404.html
 
-      - uses: actions/upload-pages-artifact@v5
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
           path: dist/gas-link-prototype/browser
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5

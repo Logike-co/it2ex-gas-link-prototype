@@ -121,7 +121,7 @@ npm start            # http://localhost:4200
 npm run build:prod   # salida en dist/gas-link-prototype/browser
 ```
 
-La publicación en GitHub Pages está en `.github/workflows/pages.yml`: en cada push a `main` verifica lint y pruebas unitarias, compila con la ruta del repositorio y publica `dist/gas-link-prototype/browser`.
+La publicación en GitHub Pages está en `.github/workflows/pages.yml`: en cada push a `main` verifica lint, pruebas unitarias y de extremo a extremo (Playwright levanta su propio servidor en el puerto 4200), compila con la ruta del repositorio y publica `dist/gas-link-prototype/browser`.
 
 ## Pruebas
 
@@ -129,7 +129,7 @@ La publicación en GitHub Pages está en `.github/workflows/pages.yml`: en cada 
 npm run lint                     # ESLint (TypeScript y plantillas)
 npx jest --ci                    # motor, formatos, almacén, acceso, guía y shell
 npx playwright install chromium  # una sola vez
-npx playwright test              # recorrido ESC-01, aislamiento, menú por usuario, guía, usuarios, prerrequisitos y celular (375 y 360 px)
+npx playwright test              # recorridos ESC-01, ESC-02 y ESC-03, avisos, aislamiento, menú por usuario, guía, usuarios, prerrequisitos y celular (375 y 360 px)
 ```
 
 Las pruebas unitarias verifican los valores de control de los datos de ejemplo y de los escenarios ESC-01 y ESC-02, la aplicación por origen y por antigüedad (incluido un pago partido entre cargas), el saldo a favor, el dinero en poder del vendedor, la conciliación, los invariantes de la cuenta, la sesión por usuario con la unión de perfiles, el menú y el inicio de cada usuario, los usuarios de cada empresa y los prerrequisitos guiados.

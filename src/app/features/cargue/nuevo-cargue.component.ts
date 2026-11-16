@@ -246,7 +246,7 @@ export class NuevoCargueComponent {
     );
     this.error.set(r.ok ? null : r.error);
     if (r.ok) {
-      this.router.navigateByUrl(`/empresa/cargues/${r.value.id}`);
+      this.router.navigateByUrl(`/empresa/cargues/${r.value.id}`, this.store.conAviso());
     }
   }
 }

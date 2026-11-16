@@ -203,6 +203,6 @@ export class CobroComponent {
       const res = this.store.exec((sim) => sim.registrarReparto(this.conductorId(), r.venta.id, q, this.reparto().empresa, this.reparto().vendedor));
       if (!res.ok) return;
     }
-    this.router.navigateByUrl(`/conductor/ventas/${r.venta.id}/montos`);
+    this.router.navigateByUrl(`/conductor/ventas/${r.venta.id}/montos`, this.store.conAviso());
   }
 }

@@ -63,7 +63,7 @@ export class NuevoUsuarioComponent {
     const r = this.store.exec((sim) => sim.crearUsuarioEmpresa(e.id, { nombre: this.nombre, usuario: this.usuario }));
     if (r.ok) {
       this.error.set(null);
-      this.router.navigateByUrl(this.volver());
+      this.router.navigateByUrl(this.volver(), this.store.conAviso());
     } else {
       this.error.set(r.error);
     }

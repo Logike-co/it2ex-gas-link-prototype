@@ -17,6 +17,11 @@ interface DemoPrefs {
 
 const DEFAULT_PREFS: DemoPrefs = { hudOpen: false, showTrace: false, preset: 'ESC-01', step: 0 };
 
+/** Marca en `NavigationBehaviorOptions.info` de una navegación que no mueve el paso de la guía. */
+interface InfoGuia {
+  guiaFija?: boolean;
+}
+
 /**
  * Modo presentador (§8, workflow T §1.4): la guía es el único lugar de los controles del demo
  * (cambio de usuario, escenarios precargados, reinicio en un clic y trazabilidad). Los datos de
@@ -51,7 +56,9 @@ export class DemoModeStore {
       if (e instanceof NavigationEnd) {
         const view = viewOfUrl(e.urlAfterRedirects);
         this.currentView.set(view);
-        this.followView(view);
+        if (!(this.router.currentNavigation()?.extras.info as InfoGuia | undefined)?.guiaFija) {
+          this.followView(view);
+        }
       }
     });
   }
@@ -94,11 +101,16 @@ export class DemoModeStore {
     this.resetData();
   }
 
+  /**
+   * Tras reiniciar, la demo abre la pantalla de inicio del usuario (o el ingreso si la sesión no
+   * sigue): la pantalla abierta podía mostrar datos creados en vivo que la semilla ya no tiene.
+   * Esa navegación lleva el aviso del reinicio y no mueve la guía de su paso 1.
+   */
   private resetData(): void {
     const kept = this.store.reset();
-    if (!kept) {
-      this.router.navigateByUrl('/ingreso');
-    }
+    const opciones = this.store.conAviso();
+    const info: InfoGuia = { ...(opciones.info as object | undefined), guiaFija: true };
+    this.router.navigateByUrl(kept ? this.store.inicio() : '/ingreso', { ...opciones, info });
   }
 
   /**

@@ -45,8 +45,8 @@ interface FilaEditable {
           <thead>
             <tr>
               <th>Presentación</th>
-              <th>Peso (kg) <app-ilustrativo detalle="Peso del gas: libras × 0,4536 (SUP-03)." /></th>
-              <th>Valor al vendedor (COP) <app-ilustrativo detalle="Precios de ejemplo (SUP-02)." /></th>
+              <th>Peso (kg) <app-ilustrativo detalle="Peso del gas: libras × 0,4536." /></th>
+              <th>Valor al vendedor (COP) <app-ilustrativo detalle="Precios de ejemplo." /></th>
               <th class="num">Precio promedio al usuario</th>
               <th>Activa</th>
             </tr>

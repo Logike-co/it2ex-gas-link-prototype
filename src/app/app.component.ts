@@ -1,9 +1,9 @@
-import { Component, computed, effect, HostListener, inject, signal } from '@angular/core';
+import { afterNextRender, Component, computed, DestroyRef, effect, ElementRef, HostListener, inject, Injector, signal, viewChild } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { DISCLAIMER } from './brand';
 import { ViewId } from './core/access/access';
 import { perfilesTexto } from './core/simulation/selectors';
-import { DemoStore, Flash } from './core/state/demo.store';
+import { DemoStore } from './core/state/demo.store';
 import { DemoHudComponent } from './demo/demo-hud.component';
 import { DemoModeStore } from './demo/demo-mode.store';
 import { ViewTraceComponent } from './demo/view-trace.component';
@@ -12,15 +12,17 @@ import { menuViewOf, pathOf } from './views';
 
 /** Pantalla angosta (celular): el menú ☰ es un overlay que se cierra al navegar. */
 const PANTALLA_ANGOSTA = '(max-width: 767px)';
-const esAngosta = (): boolean => typeof window !== 'undefined' && !!window.matchMedia?.(PANTALLA_ANGOSTA).matches;
+const consultaAngosta = (): MediaQueryList | null => (typeof window !== 'undefined' && window.matchMedia?.(PANTALLA_ANGOSTA)) || null;
 
 /**
  * Shell de la demo (flow-map §1.2 y §1.6): banda fija con la leyenda obligatoria; barra
  * superior del producto (☰ · logo · empresa y usuario · «Guía» · «Salir»), sin controles del
  * demo (E66: esos viven en la guía); menú ☰ con las secciones del usuario (R-15). En escritorio
  * el menú es una columna plegable, abierta por defecto; en el celular es un overlay que se
- * cierra al elegir una opción, con Esc o al tocar fuera (E67). El patrón del ☰ viene del
- * simulador IT2Pay (`btn-menu`, `menuOpen`, cierre en pantallas angostas).
+ * cierra al elegir una opción, al navegar (también con el botón Atrás), con Esc o al tocar
+ * fuera (E67). Como overlay es un diálogo modal: recibe el foco al abrirse, lo retiene mientras
+ * está abierto y, con Esc, lo devuelve al ☰. El patrón del ☰ viene del simulador IT2Pay
+ * (`btn-menu`, `menuOpen`, cierre en pantallas angostas).
  */
 @Component({
   selector: 'app-root',
@@ -44,12 +46,15 @@ export class AppComponent {
   /** Opción del menú que se marca: la de la pantalla abierta o la de su padre (§1.2, E51). */
   readonly opcionActiva = computed(() => menuViewOf(this.demo.currentView()));
 
-  /** Menú ☰: abierto por defecto en escritorio, cerrado en el celular; vuelve a ese estado tras cada ingreso. */
-  readonly menuOpen = signal(!esAngosta());
+  /** Pantalla angosta (celular): el menú ☰ es un overlay modal. Sigue los cambios de tamaño. */
+  readonly angosta = signal(consultaAngosta()?.matches ?? false);
 
-  private flashAt = 0;
-  /** Aviso que el efecto ya registró; si el actual es otro, lo acaba de publicar la acción que navegó. */
-  private flashVisto: Flash | null = null;
+  /** Menú ☰: abierto por defecto en escritorio, cerrado en el celular; vuelve a ese estado tras cada ingreso. */
+  readonly menuOpen = signal(!this.angosta());
+
+  private readonly injector = inject(Injector);
+  private readonly btnMenu = viewChild<ElementRef<HTMLButtonElement>>('btnMenu');
+  private readonly menuNav = viewChild<ElementRef<HTMLElement>>('menuNav');
 
   constructor() {
     // Tras cada ingreso (también al cambiar de usuario desde la guía) el menú vuelve a su estado por defecto.
@@ -58,25 +63,29 @@ export class AppComponent {
       const id = this.store.usuario()?.id ?? null;
       if (id !== ultimo) {
         if (id) {
-          this.menuOpen.set(!esAngosta());
+          this.menuOpen.set(!this.angosta());
         }
         ultimo = id;
       }
     });
-    // Un aviso se descarta al cambiar de pantalla, salvo que lo haya producido la acción que navegó.
-    // Si la pantalla de destino ya estaba cargada, la navegación termina antes de que corra el
-    // efecto: un aviso que el efecto aún no registró es nuevo y se conserva (SUP-28: el aviso
-    // de un formulario hijo se ve en su padre).
-    effect(() => {
-      this.flashVisto = this.store.flash();
-      this.flashAt = Date.now();
-    });
+    // Al pasar a una pantalla angosta el menú se cierra para no tapar la pantalla; al volver al
+    // escritorio queda abierto, que es su estado por defecto ahí.
+    const consulta = consultaAngosta();
+    if (consulta) {
+      const alCambiar = (e: MediaQueryListEvent) => {
+        this.angosta.set(e.matches);
+        this.menuOpen.set(!e.matches);
+      };
+      consulta.addEventListener('change', alCambiar);
+      inject(DestroyRef).onDestroy(() => consulta.removeEventListener('change', alCambiar));
+    }
     this.router.events.subscribe((e) => {
       if (e instanceof NavigationEnd) {
-        const actual = this.store.flash();
-        if (actual !== null && actual === this.flashVisto && Date.now() - this.flashAt > 1500) {
-          this.store.flash.set(null);
-        }
+        // Un aviso solo sobrevive a la navegación que lo trae (SUP-28: el aviso de un formulario
+        // hijo se ve en su padre); cualquier otra navegación lo descarta.
+        this.store.descartarAvisoAjeno(this.router.currentNavigation()?.extras.info);
+        // En el celular el menú se cierra con cada navegación, también con el botón Atrás.
+        this.cerrarMenuEnCelular();
       }
     });
   }
@@ -87,13 +96,52 @@ export class AppComponent {
 
   toggleMenu(): void {
     this.menuOpen.update((v) => !v);
+    if (this.menuOpen() && this.angosta()) {
+      // Como overlay, el foco pasa al primer enlace del menú.
+      afterNextRender(() => this.enlacesMenu()[0]?.focus(), { injector: this.injector });
+    }
   }
 
   /** En pantallas angostas el menú se cierra al elegir una opción; en escritorio se queda abierto. */
   cerrarMenuEnCelular(): void {
-    if (esAngosta()) {
+    if (this.angosta()) {
       this.menuOpen.set(false);
     }
+  }
+
+  /** Cierra el overlay (Esc o tocar fuera) y devuelve el foco al ☰. */
+  cerrarOverlay(): void {
+    if (this.angosta() && this.menuOpen()) {
+      this.menuOpen.set(false);
+      this.btnMenu()?.nativeElement.focus();
+    }
+  }
+
+  /** Mientras el overlay está abierto, Tab y Mayús+Tab recorren solo los enlaces del menú. */
+  @HostListener('document:keydown.tab', ['$event'])
+  @HostListener('document:keydown.shift.tab', ['$event'])
+  atraparFoco(event: Event): void {
+    if (!(event instanceof KeyboardEvent) || !this.angosta() || !this.menuOpen()) {
+      return;
+    }
+    const enlaces = this.enlacesMenu();
+    if (enlaces.length === 0) {
+      return;
+    }
+    const primero = enlaces[0];
+    const ultimo = enlaces[enlaces.length - 1];
+    const activo = document.activeElement;
+    if (event.shiftKey && (activo === primero || !enlaces.includes(activo as HTMLElement))) {
+      event.preventDefault();
+      ultimo.focus();
+    } else if (!event.shiftKey && (activo === ultimo || !enlaces.includes(activo as HTMLElement))) {
+      event.preventDefault();
+      primero.focus();
+    }
+  }
+
+  private enlacesMenu(): HTMLElement[] {
+    return [...(this.menuNav()?.nativeElement.querySelectorAll<HTMLElement>('a[href]') ?? [])];
   }
 
   salir(): void {
@@ -101,10 +149,10 @@ export class AppComponent {
     this.router.navigateByUrl('/ingreso');
   }
 
-  /** Esc cierra el menú cuando es un overlay (celular). */
+  /** Esc cierra el menú cuando es un overlay (celular) y devuelve el foco al ☰. */
   @HostListener('document:keydown.escape')
   onEscape(): void {
-    this.cerrarMenuEnCelular();
+    this.cerrarOverlay();
   }
 
   /** Atajos del presentador: `Ctrl+Shift+D` abre o cierra la guía; `Ctrl+Shift+R` reinicia. */

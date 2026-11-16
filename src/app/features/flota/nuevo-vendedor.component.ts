@@ -56,7 +56,7 @@ export class NuevoVendedorComponent {
     );
     this.errorVendedor.set(r.ok ? null : r.error);
     if (r.ok) {
-      this.router.navigateByUrl(`/empresa/flota/vendedores/${r.value.id}`);
+      this.router.navigateByUrl(`/empresa/flota/vendedores/${r.value.id}`, this.store.conAviso());
     }
   }
 }

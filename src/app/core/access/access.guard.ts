@@ -1,5 +1,5 @@
 import { inject } from '@angular/core';
-import { CanMatchFn, Router } from '@angular/router';
+import { CanMatchFn, RedirectCommand, Router } from '@angular/router';
 import { DemoStore } from '../state/demo.store';
 import { NO_ACCESS_MESSAGE, ViewId } from './access';
 
@@ -25,5 +25,6 @@ export const accessGuard: CanMatchFn = (route) => {
     return true;
   }
   store.flash.set({ kind: 'warning', text: NO_ACCESS_MESSAGE });
-  return router.parseUrl(store.inicio());
+  // El aviso viaja con la redirección: se ve en la pantalla de inicio y en ninguna otra.
+  return new RedirectCommand(router.parseUrl(store.inicio()), store.conAviso());
 };

@@ -24,9 +24,12 @@ export class BadgeComponent {
   readonly color = computed(() => TONES[this.tone()]);
 }
 
+/** Ayuda del «Ilustrativo» del dinero en poder del vendedor (regla de ejemplo, SUP-10). */
+export const AYUDA_EN_PODER = 'Suma de lo cobrado en efectivo y a la llave del vendedor; no se descuenta con sus pagos a la empresa.';
+
 /**
- * Rótulo «Ilustrativo» (flow-map §0 y §11): valor o regla de ejemplo que se valida con el
- * prospecto. Se pone junto al dato.
+ * Rótulo «Ilustrativo» (flow-map §0 y §11): valor o regla de ejemplo, sujeto a validación. Se
+ * pone junto al dato.
  */
 @Component({
   selector: 'app-ilustrativo',
@@ -41,5 +44,5 @@ export class BadgeComponent {
 })
 export class IlustrativoComponent {
   readonly detalle = input<string>('');
-  readonly ayuda = computed(() => `Valor o regla de ejemplo; se valida con el prospecto.${this.detalle() ? ' ' + this.detalle() : ''}`);
+  readonly ayuda = computed(() => `Valor o regla de ejemplo, sujeto a validación.${this.detalle() ? ' ' + this.detalle() : ''}`);
 }

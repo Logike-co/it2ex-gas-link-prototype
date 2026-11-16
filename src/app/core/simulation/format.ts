@@ -10,9 +10,6 @@ const groupThousands = (n: number): string => String(Math.round(Math.abs(n))).re
 /** `$ 1.000.000`; negativo: `−$ 50.000`. */
 export const formatMoney = (n: number): string => `${n < 0 ? '−' : ''}$ ${groupThousands(n)}`;
 
-/** `1.000.000` (sin signo de pesos), para campos y tablas compactas. */
-export const formatNumber = (n: number): string => `${n < 0 ? '−' : ''}${groupThousands(n)}`;
-
 /** Décimas de kilo → `235,6 kg`. */
 export const formatKg = (decimas: number): string => {
   const sign = decimas < 0 ? '−' : '';

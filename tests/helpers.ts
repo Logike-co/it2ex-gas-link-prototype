@@ -13,8 +13,13 @@ export const limpio = async (page: Page): Promise<void> => {
 /** Entra por la pantalla de ingreso con la tarjeta del usuario (`paula.condor`): una sola entrada por usuario. */
 export const entrarComo = async (page: Page, usuario: string): Promise<void> => {
   await page.goto('/ingreso');
-  await page.getByTestId(`tarjeta-${usuario}`).click();
+  const tarjeta = page.getByTestId(`tarjeta-${usuario}`);
+  const nombre = (await tarjeta.getByTestId('tarjeta-nombre').textContent())?.trim() ?? '';
+  await tarjeta.click();
   await expect(page).not.toHaveURL(/\/ingreso/);
+  // Con las pantallas precargadas, la URL cambia antes de que se pinte la sesión nueva: se espera
+  // a que la barra muestre al usuario (el menú se pinta en la misma pasada).
+  await expect(page.getByTestId('usuario-sesion')).toHaveText(nombre);
 };
 
 /** Abre la guía si está cerrada. */
@@ -34,6 +39,8 @@ export const cambiarA = async (page: Page, usuarioId: string, url: RegExp): Prom
 
 /** Elige una opción del menú ☰ (lo abre si está plegado, p. ej. en el celular). */
 export const menu = async (page: Page, view: string): Promise<void> => {
+  // El ☰ y el menú se pintan juntos: sin el ☰ en pantalla, el menú aún no se puede leer.
+  await expect(page.getByTestId('btn-menu')).toBeVisible();
   const link = page.getByTestId(`nav-${view}`);
   if (!(await link.isVisible())) {
     await page.getByTestId('btn-menu').click();

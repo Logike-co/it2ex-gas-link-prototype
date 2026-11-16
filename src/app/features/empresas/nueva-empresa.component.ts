@@ -49,7 +49,7 @@ export class NuevaEmpresaComponent {
     );
     if (r.ok) {
       this.error.set(null);
-      this.router.navigateByUrl(`/admin/empresas/${r.value.id}`);
+      this.router.navigateByUrl(`/admin/empresas/${r.value.id}`, this.store.conAviso());
     } else {
       this.error.set(r.error);
     }

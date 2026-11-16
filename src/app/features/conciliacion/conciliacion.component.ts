@@ -2,7 +2,7 @@ import { Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { conciliacion, ESTADO_VENDEDOR_LABEL } from '../../core/simulation/selectors';
 import { DemoStore } from '../../core/state/demo.store';
-import { BadgeComponent, IlustrativoComponent } from '../../shared/badges.component';
+import { AYUDA_EN_PODER, BadgeComponent, IlustrativoComponent } from '../../shared/badges.component';
 import { CopPipe } from '../../shared/pipes';
 import { TONO_VENDEDOR } from '../cuenta/cuenta-shared';
 
@@ -24,9 +24,9 @@ import { TONO_VENDEDOR } from '../cuenta/cuenta-shared';
             <th>Vendedor</th>
             <th>Camiones</th>
             <th class="num">Vendido (cargas)</th>
-            <th class="num">Pagado <app-ilustrativo detalle="Lo cobrado a la llave de la empresa abona desde que se registra; «Llegó» solo confirma (SUP-07)." /></th>
+            <th class="num">Pagado <app-ilustrativo detalle="Lo cobrado a la llave de la empresa abona desde que se registra; «Llegó» solo confirma." /></th>
             <th class="num">Pendiente</th>
-            <th class="num">En poder <app-ilustrativo detalle="SUP-10" /></th>
+            <th class="num">En poder <app-ilustrativo [detalle]="ayudaEnPoder" /></th>
             <th>Alertas</th>
             <th>Estado</th>
           </tr>
@@ -80,6 +80,7 @@ import { TONO_VENDEDOR } from '../cuenta/cuenta-shared';
   `,
 })
 export class ConciliacionComponent {
+  readonly ayudaEnPoder = AYUDA_EN_PODER;
   readonly store = inject(DemoStore);
   readonly estadoVendedor = ESTADO_VENDEDOR_LABEL;
   readonly tonoVendedor = TONO_VENDEDOR;
